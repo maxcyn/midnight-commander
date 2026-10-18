@@ -1,256 +1,1443 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="paper">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>SecondShift — Architecture</title>
+<title>SecondShift — System Architecture</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:ital,wght@0,400;0,500;0,600;1,400&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
-  :root { --bg:#0b1020; --panel:#141b33; --line:#2a3560; --text:#e7ebf7; --muted:#9aa5c7;
-          --sentry:#a855f7; --agent:#22c55e; --rec:#38bdf8; --voice:#f59e0b; --exec:#ef4444; --md:#eab308; }
-  * { box-sizing:border-box; margin:0; padding:0; }
-  body { background:var(--bg); color:var(--text); font-family:Inter,Segoe UI,system-ui,sans-serif; overflow:hidden; }
-  .slide { position:absolute; inset:0; padding:56px 72px; display:none; flex-direction:column; gap:22px; }
-  .slide.active { display:flex; }
-  h1 { font-size:54px; letter-spacing:-1px; }
-  h2 { font-size:34px; }
-  h3 { font-size:18px; color:var(--muted); font-weight:500; }
-  p, li { font-size:19px; line-height:1.55; color:#cfd6ee; }
-  ul { padding-left:22px; display:flex; flex-direction:column; gap:6px; }
-  code, pre { font-family:Consolas,ui-monospace,monospace; }
-  pre { background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:16px 18px; font-size:14.5px; line-height:1.5; overflow:auto; color:#d6dcf5; }
-  .tag { display:inline-block; padding:3px 10px; border-radius:999px; font-size:13px; font-weight:600; color:#0b1020; }
-  .grid { display:grid; gap:18px; }
-  .g2 { grid-template-columns:1fr 1fr; } .g3 { grid-template-columns:repeat(3,1fr); }
-  .card { background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:18px 20px; }
-  .card h4 { font-size:17px; margin-bottom:8px; }
-  .card p, .card li { font-size:16px; }
-  .flow { display:flex; align-items:stretch; gap:10px; margin-top:10px; }
-  .node { flex:1; background:var(--panel); border:2px solid var(--c); border-radius:12px; padding:14px; display:flex; flex-direction:column; gap:6px; }
-  .node b { color:var(--c); font-size:15px; text-transform:uppercase; letter-spacing:.5px; }
-  .node span { font-size:14.5px; color:#cfd6ee; line-height:1.4; }
-  .arrow { align-self:center; color:var(--muted); font-size:26px; }
-  .store { margin-top:14px; display:flex; gap:14px; }
-  .store .node { flex:none; width:auto; min-width:260px; border-style:dashed; }
-  table { border-collapse:collapse; width:100%; font-size:14.5px; }
-  th, td { border:1px solid var(--line); padding:8px 10px; text-align:left; vertical-align:top; }
-  th { background:#1b2446; color:var(--muted); font-weight:600; }
-  .muted { color:var(--muted); }
-  .footer { position:fixed; bottom:18px; right:28px; color:var(--muted); font-size:14px; }
-  .hint { position:fixed; bottom:18px; left:28px; color:#56608a; font-size:13px; }
-  .big { font-size:24px; color:#dfe5fb; max-width:1000px; }
+  /* ==========================================================================
+   * DESIGN SYSTEM — "SIGNAL" TECHNICAL SPECIFICATION SHEET
+   * Inspired by Swiss engineering manuals & Bell Labs technical briefs.
+   * Zero neon gradients, zero pill-tag soup, strict structural rules.
+   * ========================================================================== */
+  :root,
+  [data-theme="paper"] {
+    --bg: #f3f4f6;
+    --surface: #e8ecf2;
+    --surface-raised: #ffffff;
+    --ink: #0e1116;
+    --ink-secondary: #363d4d;
+    --ink-muted: #636d80;
+    --rule-heavy: #0e1116;
+    --rule-light: rgba(14, 17, 22, 0.16);
+    --rule-faint: rgba(14, 17, 22, 0.08);
+    --primary: #1d4ed8;       /* Structural blue: indices, metadata, links */
+    --primary-wash: rgba(29, 78, 216, 0.075);
+    --accent: #0f766e;        /* Verification teal: measured data & proofs */
+    --accent-wash: rgba(15, 118, 110, 0.085);
+    --warn: #b45309;          /* Fault / caution amber */
+    --warn-wash: rgba(180, 83, 9, 0.085);
+    --danger: #b91c1c;        /* Blocked / rejected */
+    --danger-wash: rgba(185, 28, 28, 0.075);
+  }
+
+  [data-theme="carbon"] {
+    --bg: #0b0d11;
+    --surface: #12161e;
+    --surface-raised: #171c26;
+    --ink: #eceff4;
+    --ink-secondary: #b8c0cc;
+    --ink-muted: #7b8698;
+    --rule-heavy: #eceff4;
+    --rule-light: rgba(236, 239, 244, 0.18);
+    --rule-faint: rgba(236, 239, 244, 0.08);
+    --primary: #60a5fa;
+    --primary-wash: rgba(96, 165, 250, 0.11);
+    --accent: #2dd4bf;
+    --accent-wash: rgba(45, 212, 191, 0.11);
+    --warn: #fbbf24;
+    --warn-wash: rgba(251, 191, 36, 0.11);
+    --danger: #f87171;
+    --danger-wash: rgba(248, 113, 113, 0.11);
+  }
+
+  * {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+  }
+
+  html, body {
+    width: 100%;
+    height: 100%;
+    background: var(--bg);
+    color: var(--ink);
+    font-family: "IBM Plex Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    -webkit-font-smoothing: antialiased;
+    overflow: hidden;
+  }
+
+  code, pre, .mono {
+    font-family: "IBM Plex Mono", "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-variant-numeric: tabular-nums;
+  }
+
+  code {
+    font-size: 0.88em;
+    background: var(--surface);
+    padding: 1px 4px;
+    border-radius: 2px;
+    color: var(--ink);
+  }
+
+  /* ==========================================================================
+   * STAGE & SLIDE SHELL
+   * Guarantees zero horizontal or vertical cutoff at 1280x720+.
+   * ========================================================================== */
+  .deck-viewport {
+    position: relative;
+    width: 100vw;
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    padding: clamp(16px, 2.5vh, 30px) clamp(28px, 4.2vw, 60px);
+    max-width: 1520px;
+    margin: 0 auto;
+  }
+
+  /* Running header & footer furniture */
+  .deck-topbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: 12px;
+    color: var(--ink-muted);
+    padding-bottom: 8px;
+    flex-shrink: 0;
+    user-select: none;
+  }
+
+  .deck-topbar-left {
+    display: flex;
+    align-items: center;
+    gap: 18px;
+  }
+
+  .status-dot {
+    display: inline-block;
+    width: 7px;
+    height: 7px;
+    background: var(--primary);
+    margin-right: 6px;
+  }
+
+  .deck-controls {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .ctrl-btn {
+    background: transparent;
+    border: 1px solid var(--rule-light);
+    color: var(--ink-secondary);
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: 11px;
+    padding: 3px 8px;
+    border-radius: 2px;
+    cursor: pointer;
+    transition: border-color 0.15s, color 0.15s, background 0.15s;
+  }
+
+  .ctrl-btn:hover {
+    border-color: var(--ink);
+    color: var(--ink);
+    background: var(--primary-wash);
+  }
+
+  .slides-stage {
+    position: relative;
+    flex: 1 1 auto;
+    min-height: 0;
+    width: 100%;
+  }
+
+  .slide {
+    position: absolute;
+    inset: 0;
+    display: none;
+    flex-direction: column;
+    justify-content: flex-start;
+    gap: clamp(12px, 1.8vh, 20px);
+    overflow: hidden;
+  }
+
+  .slide.active {
+    display: flex;
+  }
+
+  .deck-bottombar {
+    display: grid;
+    grid-template-columns: 1fr auto 1fr;
+    align-items: center;
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: 12px;
+    color: var(--ink-muted);
+    padding-top: 8px;
+    flex-shrink: 0;
+    user-select: none;
+    white-space: nowrap;
+  }
+
+  .bottom-left {
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .bottom-right {
+    text-align: right;
+  }
+
+  .folio-num {
+    color: var(--primary);
+    font-weight: 600;
+  }
+
+  .progress-dots {
+    display: flex;
+    gap: 6px;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .progress-dot {
+    width: 18px;
+    height: 3px;
+    background: var(--rule-light);
+    border: none;
+    cursor: pointer;
+    padding: 0;
+    transition: background 0.15s, width 0.15s;
+  }
+
+  .progress-dot.active {
+    background: var(--primary);
+    width: 32px;
+  }
+
+  /* ==========================================================================
+   * STRUCTURAL TYPOGRAPHY & RULED HEADERS
+   * ========================================================================== */
+  .slide-head {
+    border-top: 2px solid var(--rule-heavy);
+    padding-top: 8px;
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 24px;
+    flex-shrink: 0;
+  }
+
+  .slide-head-main {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+  }
+
+  .kicker {
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--primary);
+    white-space: nowrap;
+  }
+
+  h1 {
+    font-size: clamp(44px, 5vw, 64px);
+    font-weight: 700;
+    line-height: 1.03;
+    letter-spacing: -0.025em;
+    color: var(--ink);
+  }
+
+  h2 {
+    font-size: clamp(21px, 2.1vw, 27px);
+    font-weight: 700;
+    line-height: 1.15;
+    letter-spacing: -0.015em;
+    color: var(--ink);
+    white-space: nowrap;
+  }
+
+  .slide-sub {
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: 12px;
+    color: var(--ink-muted);
+    text-align: right;
+    white-space: nowrap;
+  }
+
+  h3 {
+    font-size: 15.5px;
+    font-weight: 700;
+    line-height: 1.25;
+    color: var(--ink);
+    margin-bottom: 5px;
+  }
+
+  p, li {
+    font-size: clamp(13.5px, 1.15vw, 15.5px);
+    line-height: 1.45;
+    color: var(--ink-secondary);
+  }
+
+  strong {
+    color: var(--ink);
+    font-weight: 600;
+  }
+
+  mark {
+    background: var(--primary-wash);
+    color: var(--ink);
+    padding: 1px 5px;
+    border-radius: 2px;
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: 0.88em;
+  }
+
+  /* ==========================================================================
+   * RULED PANES, NUMBERED LISTS & GRIDS
+   * ========================================================================== */
+  .grid-2 {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 24px;
+  }
+
+  .grid-3 {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 14px;
+  }
+
+  .grid-12 {
+    display: grid;
+    grid-template-columns: repeat(12, minmax(0, 1fr));
+    gap: 24px;
+  }
+
+  .col-4 { grid-column: span 4; }
+  .col-5 { grid-column: span 5; }
+  .col-6 { grid-column: span 6; }
+  .col-7 { grid-column: span 7; }
+  .col-8 { grid-column: span 8; }
+  .col-12 { grid-column: span 12; }
+
+  .pane {
+    border-top: 1px solid var(--rule-light);
+    padding-top: 10px;
+    min-width: 0;
+  }
+
+  .pane-tinted {
+    background: var(--surface);
+    border-top: 2px solid var(--primary);
+    padding: 12px 15px;
+    min-width: 0;
+  }
+
+  .pane-label {
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: 11.5px;
+    color: var(--primary);
+    margin-bottom: 5px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  /* Numbered technical review list */
+  .sg-list {
+    list-style: none;
+    counter-reset: item;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .sg-list li {
+    counter-increment: item;
+    position: relative;
+    padding-left: 28px;
+  }
+
+  .sg-list li::before {
+    content: counter(item, decimal-leading-zero);
+    position: absolute;
+    left: 0;
+    top: 2px;
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: 11.5px;
+    font-weight: 600;
+    color: var(--primary);
+  }
+
+  /* Bottom takeaway bar */
+  .callout-bar {
+    margin-top: auto;
+    border-top: 1px solid var(--rule-light);
+    padding-top: 9px;
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 16px;
+    font-size: 13.5px;
+    color: var(--ink-secondary);
+    flex-shrink: 0;
+  }
+
+  .callout-bar .tag-mono {
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: 11.5px;
+    color: var(--accent);
+    font-weight: 600;
+    white-space: nowrap;
+  }
+
+  /* ==========================================================================
+   * SLIDE 1: COVER SHEET
+   * ========================================================================== */
+  .cover-wrap {
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    height: 100%;
+    border-top: 3px solid var(--rule-heavy);
+    padding-top: 18px;
+  }
+
+  .cover-meta {
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: 12.5px;
+    color: var(--primary);
+    display: flex;
+    justify-content: space-between;
+  }
+
+  .cover-hero {
+    max-width: 980px;
+  }
+
+  .cover-deck {
+    font-size: clamp(17.5px, 1.7vw, 22px);
+    line-height: 1.42;
+    color: var(--ink-secondary);
+    margin-top: 14px;
+    max-width: 860px;
+  }
+
+  .cover-specs {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 20px;
+    border-top: 1px solid var(--rule-light);
+    padding-top: 14px;
+  }
+
+  .spec-cell {
+    min-width: 0;
+  }
+
+  .spec-cell .spec-id {
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: 11.5px;
+    color: var(--primary);
+    display: block;
+    margin-bottom: 4px;
+  }
+
+  .spec-cell .spec-title {
+    font-size: 15px;
+    font-weight: 700;
+    color: var(--ink);
+    display: block;
+  }
+
+  .spec-cell .spec-desc {
+    font-size: 13px;
+    color: var(--ink-muted);
+    margin-top: 3px;
+    line-height: 1.38;
+  }
+
+  /* ==========================================================================
+   * SLIDE 2: END-TO-END PIPELINE & CLOSED LOOP (ZERO CUTOFF)
+   * ========================================================================== */
+  .pipeline-stage-grid {
+    display: grid;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    gap: 12px;
+    width: 100%;
+  }
+
+  .pipe-step {
+    background: var(--surface-raised);
+    border: 1px solid var(--rule-light);
+    border-top: 3px solid var(--rule-heavy);
+    padding: 12px 13px 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    min-width: 0;
+  }
+
+  .pipe-step.step-accent {
+    border-top-color: var(--primary);
+  }
+
+  .pipe-step.step-verify {
+    border-top-color: var(--accent);
+  }
+
+  .pipe-step-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 6px;
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: 11px;
+    white-space: nowrap;
+  }
+
+  .pipe-num {
+    color: var(--primary);
+    font-weight: 600;
+  }
+
+  .pipe-actor {
+    color: var(--ink-muted);
+    font-size: 10.5px;
+  }
+
+  .pipe-title {
+    font-size: 15px;
+    font-weight: 700;
+    color: var(--ink);
+  }
+
+  .pipe-body {
+    font-size: 12.8px;
+    line-height: 1.38;
+    color: var(--ink-secondary);
+  }
+
+  .pipe-io {
+    margin-top: auto;
+    padding-top: 6px;
+    border-top: 1px dashed var(--rule-light);
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: 10.5px;
+    color: var(--ink-muted);
+  }
+
+  /* Feedback loop band under the 5 forward stages */
+  .feedback-band {
+    display: grid;
+    grid-template-columns: repeat(12, minmax(0, 1fr));
+    gap: 12px;
+    width: 100%;
+    align-items: stretch;
+  }
+
+  .loop-card {
+    background: var(--surface);
+    border: 1px solid var(--rule-light);
+    padding: 11px 14px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    gap: 4px;
+    min-width: 0;
+  }
+
+  .loop-card.loop-highlight {
+    background: var(--accent-wash);
+    border-color: var(--accent);
+    border-left: 3px solid var(--accent);
+  }
+
+  .loop-card-head {
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: 11.5px;
+    font-weight: 600;
+    color: var(--ink);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+  }
+
+  .loop-card p {
+    font-size: 12.8px;
+    line-height: 1.36;
+    color: var(--ink-secondary);
+  }
+
+  /* ==========================================================================
+   * TABLES & MATRICES
+   * ========================================================================== */
+  .sg-table {
+    width: 100%;
+    table-layout: fixed;
+    border-collapse: collapse;
+    font-size: 12.5px;
+  }
+
+  .sg-table th {
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--primary);
+    text-align: left;
+    padding: 6px 8px;
+    border-top: 1px solid var(--rule-heavy);
+    border-bottom: 1px solid var(--rule-light);
+    background: var(--surface);
+  }
+
+  .sg-table td {
+    padding: 7px 8px;
+    border-bottom: 1px solid var(--rule-light);
+    color: var(--ink-secondary);
+    vertical-align: top;
+    line-height: 1.35;
+    overflow-wrap: break-word;
+  }
+
+  .sg-table td.mono {
+    font-size: 11.5px;
+  }
+
+  .sg-table tr:last-child td {
+    border-bottom: 1px solid var(--rule-heavy);
+  }
+
+  .badge-mono {
+    display: inline-block;
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: 10.5px;
+    font-weight: 600;
+    padding: 2px 6px;
+    border-radius: 2px;
+    white-space: nowrap;
+  }
+
+  .badge-ok {
+    background: var(--accent-wash);
+    color: var(--accent);
+  }
+
+  .badge-warn {
+    background: var(--warn-wash);
+    color: var(--warn);
+  }
+
+  .badge-danger {
+    background: var(--danger-wash);
+    color: var(--danger);
+  }
+
+  .badge-neutral {
+    background: var(--primary-wash);
+    color: var(--primary);
+  }
+
+  /* ==========================================================================
+   * METRIC ROWS (SIGNAL TABLE-OF-ROWS STYLE)
+   * ========================================================================== */
+  .metric-rows {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .metric-row {
+    display: flex;
+    align-items: baseline;
+    gap: 18px;
+    padding: 10px 0;
+    border-top: 1px solid var(--rule-light);
+  }
+
+  .metric-row:last-child {
+    border-bottom: 1px solid var(--rule-light);
+  }
+
+  .metric-fig {
+    flex: 0 0 110px;
+    text-align: right;
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: clamp(26px, 2.5vw, 34px);
+    font-weight: 700;
+    line-height: 1;
+    color: var(--accent);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .metric-desc {
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+
+  .metric-desc strong {
+    display: block;
+    font-size: 14.5px;
+    color: var(--ink);
+  }
+
+  .metric-desc span {
+    font-size: 13px;
+    color: var(--ink-secondary);
+  }
+
+  /* ==========================================================================
+   * OVERVIEW GRID MODAL (PRESS 'G')
+   * ========================================================================== */
+  .overview-modal {
+    position: fixed;
+    inset: 0;
+    background: var(--bg);
+    z-index: 50;
+    display: none;
+    flex-direction: column;
+    padding: 28px 48px;
+    overflow-y: auto;
+  }
+
+  .overview-modal.open {
+    display: flex;
+  }
+
+  .overview-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 18px;
+    margin-top: 20px;
+  }
+
+  .overview-card {
+    background: var(--surface-raised);
+    border: 1px solid var(--rule-light);
+    border-top: 2px solid var(--rule-heavy);
+    padding: 16px;
+    cursor: pointer;
+    text-align: left;
+    transition: border-color 0.15s, transform 0.12s;
+  }
+
+  .overview-card:hover,
+  .overview-card.current {
+    border-color: var(--primary);
+    border-top-color: var(--primary);
+    transform: translateY(-2px);
+  }
+
+  .overview-card .ov-num {
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: 12px;
+    color: var(--primary);
+    font-weight: 600;
+  }
+
+  .overview-card .ov-title {
+    font-size: 16px;
+    font-weight: 700;
+    color: var(--ink);
+    margin: 6px 0 4px;
+  }
+
+  .overview-card .ov-sub {
+    font-size: 13px;
+    color: var(--ink-muted);
+  }
 </style>
 </head>
 <body>
 
-<!-- 1 -->
-<section class="slide active" style="justify-content:center">
-  <h3>Hackathon project · Midnight Commander</h3>
-  <h1>SecondShift</h1>
-  <p class="big">An on-call teammate that detects a bug, recalls how similar issues were fixed before,
-  recommends a fix, and phones the engineer to decide — without opening a laptop.</p>
-  <div style="display:flex;gap:10px;margin-top:8px">
-    <span class="tag" style="background:var(--sentry)">Sentry</span>
-    <span class="tag" style="background:var(--agent)">Context agent</span>
-    <span class="tag" style="background:var(--rec)">Recommendation agent</span>
-    <span class="tag" style="background:var(--voice)">ElevenLabs + Photon</span>
+<div class="deck-viewport">
+  <!-- Top Running Header -->
+  <header class="deck-topbar">
+    <div class="deck-topbar-left">
+      <span><span class="status-dot"></span>secondshift // arch-spec (implemented)</span>
+      <span>repo: maxcyn/midnight-commander</span>
+    </div>
+    <div class="deck-controls">
+      <button class="ctrl-btn" id="btn-grid" title="Toggle slide index (G)">[G] index</button>
+      <button class="ctrl-btn" id="btn-theme" title="Switch paper/carbon theme (T)">[T] theme</button>
+      <button class="ctrl-btn" id="btn-prev" title="Previous slide">&larr;</button>
+      <button class="ctrl-btn" id="btn-next" title="Next slide">&rarr;</button>
+    </div>
+  </header>
+
+  <!-- Main Slide Stage -->
+  <main class="slides-stage">
+
+    <!-- ====================================================================
+         SLIDE 01: COVER SHEET
+         ==================================================================== -->
+    <section class="slide active" data-title="Cover — SecondShift" data-sub="Plug-and-play incident investigator, voice responder & unified learning loop">
+      <div class="cover-wrap">
+        <div class="cover-meta">
+          <span>system architecture specification // midnight commander</span>
+          <span>service-manifest.json + sentry + creao + photon sip + elevenlabs</span>
+        </div>
+
+        <div class="cover-hero">
+          <p class="kicker" style="margin-bottom: 10px;">00 // implemented architecture</p>
+          <h1>SecondShift</h1>
+          <p class="cover-deck">
+            A manifest-driven on-call agent that correlates live Sentry telemetry and independent dependency probes with unified incident memory, enforces a two-layer deterministic policy gate, and phones the responder via Photon + ElevenLabs—turning every approved fix or refusal into verified operational memory.
+          </p>
+        </div>
+
+        <div class="cover-specs">
+          <div class="spec-cell">
+            <span class="spec-id">01 // declarative contract</span>
+            <span class="spec-title">service-manifest.json</span>
+            <span class="spec-desc">Plug-and-play definition of dependencies, read-only probes, causes, and idempotent actions.</span>
+          </div>
+          <div class="spec-cell">
+            <span class="spec-id">02 // single investigator</span>
+            <span class="spec-title">CREAO + 6 HTTP Tools</span>
+            <span class="spec-desc">Pulls Sentry spans/logs, live probes, config, and <code>past_decisions</code> to submit one grounded proposal.</span>
+          </div>
+          <div class="spec-cell">
+            <span class="spec-id">03 // voice &amp; auto-runbook</span>
+            <span class="spec-title">Photon SIP + ElevenLabs</span>
+            <span class="spec-desc">Auto-provisioned voice tools for approval/refusal, or zero-touch execution for <code>authorised</code> runbooks.</span>
+          </div>
+          <div class="spec-cell">
+            <span class="spec-id">04 // unified learning loop</span>
+            <span class="spec-title">DB + incidents.md + Runbooks</span>
+            <span class="spec-desc">Auto-snapshots decline evidence, watches `/config` for manual fixes, verifies recovery, and syncs `incidents.md`.</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ====================================================================
+         SLIDE 02: END-TO-END PIPELINE & UNIFIED LEARNING LOOP
+         Matches actual implementation (single CREAO investigator + unified memory)
+         ==================================================================== -->
+    <section class="slide" data-title="End-to-End Pipeline" data-sub="Five forward execution stages + stage 06 unified learning loop">
+      <div class="slide-head">
+        <div class="slide-head-main">
+          <span class="kicker">01 // system topology</span>
+          <h2>End-to-end incident pipeline &amp; unified learning loop</h2>
+        </div>
+        <span class="slide-sub">manifest-driven flow from sentry webhook to verified recovery</span>
+      </div>
+
+      <!-- Top Tier: Stages 01 to 05 -->
+      <div class="pipeline-stage-grid">
+        <div class="pipe-step">
+          <div class="pipe-step-head">
+            <span class="pipe-num">01 // detect</span>
+            <span class="pipe-actor">sentry webhook</span>
+          </div>
+          <div class="pipe-title">Alert Intake</div>
+          <p class="pipe-body">Verifies HMAC-SHA256 on raw bytes, deduplicates retries in <code>webhook_events</code>, and opens or attaches to one active incident.</p>
+          <div class="pipe-io">out &rarr; incident_id + run_id</div>
+        </div>
+
+        <div class="pipe-step step-accent">
+          <div class="pipe-step-head">
+            <span class="pipe-num">02 // investigate</span>
+            <span class="pipe-actor">creao agent</span>
+          </div>
+          <div class="pipe-title">Gather &amp; Diagnose</div>
+          <p class="pipe-body">Single CREAO run calls <code>service_manifest</code>, <code>sentry_evidence</code>, <code>feature_config</code>, both <code>probe</code>s, and <code>past_decisions</code>.</p>
+          <div class="pipe-io">post &rarr; submit_investigation</div>
+        </div>
+
+        <div class="pipe-step step-accent">
+          <div class="pipe-step-head">
+            <span class="pipe-num">03 // gate</span>
+            <span class="pipe-actor">investigation.ts</span>
+          </div>
+          <div class="pipe-title">Policy Validation</div>
+          <p class="pipe-body">Checks <code>source_id</code> freshness (&lt;15m), 1 independent <code>supported</code> cause, and manifest allowlist. Routes to runbook or phone.</p>
+          <div class="pipe-io">out &rarr; proposed_actions</div>
+        </div>
+
+        <div class="pipe-step">
+          <div class="pipe-step-head">
+            <span class="pipe-num">04 // decide</span>
+            <span class="pipe-actor">photon + 11labs</span>
+          </div>
+          <div class="pipe-title">Voice or Auto-Run</div>
+          <p class="pipe-body">If <code>permit_runbook</code> is <code>authorised</code>, executes directly; else calls SWE to <code>approve_action</code> or <code>decline_action</code>.</p>
+          <div class="pipe-io">out &rarr; approved | declined</div>
+        </div>
+
+        <div class="pipe-step step-verify">
+          <div class="pipe-step-head">
+            <span class="pipe-num">05 // verify</span>
+            <span class="pipe-actor">workflows.ts</span>
+          </div>
+          <div class="pipe-title">Fresh Check &amp; Prove</div>
+          <p class="pipe-body">Re-runs live probes (<code>checkApplicability</code>), executes 1 mutation (or watches manual fix), and polls Stage 6 recovery.</p>
+          <div class="pipe-io">out &rarr; recovered | escalated</div>
+        </div>
+      </div>
+
+      <!-- Middle Connector SVG: Precision-aligned with 5-col top grid and 3-col bottom grid -->
+      <svg width="100%" height="42" viewBox="0 0 1200 42" preserveAspectRatio="none" role="img" aria-label="Feedback loop from stage 05 to stage 06, into unified memory, and back to stage 02" style="flex-shrink: 0;">
+        <!-- 05 Verify (x=1090) straight down into 06 Close the loop -->
+        <line x1="1090" y1="2" x2="1090" y2="34" stroke="var(--accent)" stroke-width="2" />
+        <polygon points="1085,31 1090,40 1095,31" fill="var(--accent)" />
+        <text x="1074" y="24" text-anchor="end" font-family="IBM Plex Mono, monospace" font-size="11" fill="var(--accent)">verified / declined &darr;</text>
+
+        <!-- 06 Close the loop (x=830) through unified memory (x=600) up into 02 Investigate (x=348) -->
+        <path d="M 830 38 L 830 21 L 348 21 L 348 8" fill="none" stroke="var(--primary)" stroke-width="2" stroke-dasharray="6 4" />
+        <circle cx="600" cy="21" r="4" fill="var(--primary)" />
+        <polygon points="343,11 348,2 353,11" fill="var(--primary)" />
+        <rect x="395" y="10" width="380" height="20" fill="var(--bg)" />
+        <text x="585" y="24" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="11" fill="var(--primary)">&larr; syncs decision_feedback + incidents.md + runbooks</text>
+      </svg>
+
+      <!-- Bottom Tier: Manifest + Unified Memory + Stage 06 Close the Loop (Guaranteed inside 12-col grid) -->
+      <div class="feedback-band">
+        <div class="loop-card col-4">
+          <div class="loop-card-head">
+            <span>config // service-manifest.json</span>
+            <span class="badge-mono badge-neutral">plug-and-play</span>
+          </div>
+          <p>Single source of truth for dependencies, probe thresholds, allowed actions, and ElevenLabs voice provisioning.</p>
+        </div>
+
+        <div class="loop-card col-4">
+          <div class="loop-card-head">
+            <span>memory // past_decisions store</span>
+            <span class="badge-mono badge-neutral">sqlite + markdown</span>
+          </div>
+          <p>Unifies <code>decision_feedback</code> (with raw <code>evidence_snapshot</code>), auto-rendered <code>incidents.md</code>, and versioned <code>runbooks</code>.</p>
+        </div>
+
+        <div class="loop-card loop-highlight col-4">
+          <div class="loop-card-head">
+            <span>06 // close the loop</span>
+            <span class="badge-mono badge-ok">auto-synced</span>
+          </div>
+          <p>Snapshots decline evidence, polls <code>/config</code> via <code>watchForEngineerFix</code>, verifies manual fixes, and syncs <code>incidents.md</code>.</p>
+        </div>
+      </div>
+
+      <div class="callout-bar">
+        <span><strong>Architectural contract:</strong> One CREAO investigator reads tools and proposes; backend deterministically gates and executes; SQLite + <code>incidents.md</code> close the loop automatically.</span>
+        <span class="tag-mono">180s investigation budget · 10m proposal ttl</span>
+      </div>
+    </section>
+
+    <!-- ====================================================================
+         SLIDE 03: MANIFEST-DRIVEN INVESTIGATION & MASKED FAULT DISAMBIGUATION
+         ==================================================================== -->
+    <section class="slide" data-title="Manifest & Investigation" data-sub="How service-manifest.json and independent probes disambiguate masked failures">
+      <div class="slide-head">
+        <div class="slide-head-main">
+          <span class="kicker">02 // stages 01–02 (manifest.ts + investigation.ts)</span>
+          <h2>Manifest-driven investigation &amp; masked fault disambiguation</h2>
+        </div>
+        <span class="slide-sub">single creao agent · 6 read-only backend endpoints</span>
+      </div>
+
+      <div class="grid-12">
+        <div class="pane col-5">
+          <div class="pane-label">
+            <span>plug-and-play investigator tools</span>
+            <span>bearer tool_token</span>
+          </div>
+          <h3>Evidence collected per incident run</h3>
+          <ul class="sg-list" style="margin-top: 8px;">
+            <li><strong><code>GET /tools/service_manifest</code>:</strong> Loads request path (<code>validation &rarr; recommendations &rarr; payment &rarr; confirmation</code>), probe paths, and allowlisted actions.</li>
+            <li><strong><code>GET /tools/sentry_evidence</code> &amp; <code>feature_config</code>:</strong> Fetches scoped errors, logs, spans, and active flags—persisting each with a verifiable <code>source_id</code>.</li>
+            <li><strong><code>GET /tools/probe?dependency=…</code>:</strong> Runs live read-only probes on <code>recommendations</code> and <code>payments</code> to expose silent downstream degradation.</li>
+            <li><strong><code>GET /tools/past_decisions</code>:</strong> Returns prior approved/declined decisions, raw <code>evidence_when_declined</code> snapshots, <code>incidents.md</code>, and <code>runbooks</code>.</li>
+          </ul>
+        </div>
+
+        <div class="pane col-7">
+          <div class="pane-label">
+            <span>shared-pool masking // why both probes are mandatory</span>
+            <span>identical sentry error &ne; identical root cause</span>
+          </div>
+          <h3>Disambiguating the two checkout failure modes</h3>
+          <table class="sg-table" style="margin-top: 8px;">
+            <thead>
+              <tr>
+                <th style="width: 15%;">Scenario</th>
+                <th style="width: 21%;">Sentry &amp; Rec. Probe</th>
+                <th style="width: 19%;">Payment Probe</th>
+                <th style="width: 24%;">Supported Cause</th>
+                <th style="width: 21%;">Allowed Action</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><strong>Rec. Outage</strong></td>
+                <td><code>recommendations</code> timeout (&gt;800ms)</td>
+                <td><span class="badge-mono badge-ok">40ms healthy</span></td>
+                <td class="mono">recommendations_<wbr>timeout</td>
+                <td class="mono">disable_<wbr>recommendations</td>
+              </tr>
+              <tr>
+                <td><strong>Pool Degradation</strong></td>
+                <td><code>recommendations</code> timeout (pool full)</td>
+                <td><span class="badge-mono badge-warn">1800ms (&gt;1000ms)</span></td>
+                <td class="mono">payment_provider_<wbr>degradation</td>
+                <td class="mono">switch_payment_<wbr>provider</td>
+              </tr>
+              <tr>
+                <td><strong>Payment Down</strong></td>
+                <td><code>recommendations</code> ok (~40ms)</td>
+                <td><span class="badge-mono badge-danger">unhealthy (502)</span></td>
+                <td class="mono">payment_failure</td>
+                <td><em>escalate only</em></td>
+              </tr>
+            </tbody>
+          </table>
+
+          <div class="pane-tinted" style="margin-top: 12px;">
+            <div class="pane-label" style="margin-bottom: 3px;">
+              <span>agent-prompt.md invariant // independent root cause rule</span>
+              <span class="mono">missing_information vs non_blocking_unknowns</span>
+            </div>
+            <p style="font-size: 13px;">
+              If checkout fails at recommendations, payment code never runs—so absent payment errors prove nothing. When <code>payment_provider_degradation</code> saturates the shared pool, the agent marks <strong>only</strong> the root cause <code>supported</code> and treats the recommendation timeout as its symptom.
+            </p>
+          </div>
+        </div>
+      </div>
+
+      <div class="callout-bar">
+        <span><strong>Deduplication &amp; idempotency:</strong> Retried Sentry deliveries are ignored via <code>webhook_events</code>; CREAO run keys include <code>incident_id + opened_at</code>.</span>
+        <span class="tag-mono">4-step onboarding via service-manifest.json</span>
+      </div>
+    </section>
+
+    <!-- ====================================================================
+         SLIDE 04: TWO-LAYER DETERMINISTIC GATE & VOICE INTERACTION
+         ==================================================================== -->
+    <section class="slide" data-title="Policy Gates & Voice Call" data-sub="Submission gate, pre-execution checkApplicability, and Photon + ElevenLabs tools">
+      <div class="slide-head">
+        <div class="slide-head-main">
+          <span class="kicker">03 // stages 03–04 (investigation.ts + workflows.ts + voice.ts)</span>
+          <h2>Two-layer policy gate &amp; spoken decision loop</h2>
+        </div>
+        <span class="slide-sub">llm proposes · backend gates twice · human or runbook executes</span>
+      </div>
+
+      <div class="grid-12">
+        <!-- Left: Two-Layer Gate -->
+        <div class="pane col-6">
+          <div class="pane-label">
+            <span>03 // two-stage backend validation</span>
+            <span>submission gate + pre-execution gate</span>
+          </div>
+          <h3>Deterministic checks before any mutation</h3>
+          <p style="margin-bottom: 8px;">
+            Proposals use qualitative statuses (<mark>supported</mark>, <mark>inconclusive</mark>, <mark>contradicted</mark>). The backend enforces two separate code gates:
+          </p>
+
+          <table class="sg-table">
+            <thead>
+              <tr>
+                <th style="width: 16%;">Gate</th>
+                <th style="width: 56%;">Deterministic Rule Enforced in Code</th>
+                <th style="width: 28%;">If Violated</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td class="mono"><strong>Gate 1</strong><br><span style="font-size:10.5px;color:var(--ink-muted)">submit</span></td>
+                <td>Every cited <code>source_id</code> exists in DB &amp; age &lt; 15m</td>
+                <td><span class="badge-mono badge-danger">HTTP 422 retry</span></td>
+              </tr>
+              <tr>
+                <td class="mono"><strong>Gate 1</strong><br><span style="font-size:10.5px;color:var(--ink-muted)">decide()</span></td>
+                <td><code>missing_information</code> empty; 1 cause <code>supported</code>; action matches cause in manifest &amp; env=<code>demo</code></td>
+                <td><span class="badge-mono badge-danger">escalate only</span></td>
+              </tr>
+              <tr>
+                <td class="mono"><strong>Gate 2</strong><br><span style="font-size:10.5px;color:var(--ink-muted)">execute</span></td>
+                <td><code>checkApplicability()</code> re-probes live app: blocks <code>disable_recommendations</code> if payment probe &gt;1000ms</td>
+                <td><span class="badge-mono badge-warn">blocked_by_checks</span></td>
+              </tr>
+              <tr>
+                <td class="mono"><strong>Gate 2</strong><br><span style="font-size:10.5px;color:var(--ink-muted)">sqlite tx</span></td>
+                <td><code>BEGIN IMMEDIATE</code> checks <code>pending</code> state, 10m TTL, responder role, and 0 prior runs</td>
+                <td><span class="badge-mono badge-neutral">no-op / reject</span></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <!-- Right: Voice Call & Provisioning -->
+        <div class="pane col-6">
+          <div class="pane-label">
+            <span>04 // photon sip + elevenlabs (npm run configure:voice)</span>
+            <span>auto-provisioned from manifest</span>
+          </div>
+          <h3>Voice agent tools &amp; call lifecycle</h3>
+          <p style="margin-bottom: 8px;">
+            <code>configure-elevenlabs.ts</code> patches the ElevenLabs agent with manifest actions and dynamic variables (<code>incident_id</code>, <code>call_id</code>, <code>proposed_action</code>, <code>call_briefing</code>).
+          </p>
+
+          <table class="sg-table">
+            <thead>
+              <tr>
+                <th style="width: 44%;">Webhook Tool &amp; Endpoint</th>
+                <th style="width: 56%;">Backend Behaviour</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td class="mono"><strong>explain_evidence</strong><br>GET /voice/incidents/:id/briefing</td>
+                <td>Returns locked briefing, impact summary, hypotheses, and fresh evidence items.</td>
+              </tr>
+              <tr>
+                <td class="mono"><strong>approve_action</strong><br>POST /voice/incidents/:id/approve</td>
+                <td>Requires <code>confirmed=true</code> (+ optional code); runs <code>approveAndExecute()</code> &amp; starts Stage 6 verification.</td>
+              </tr>
+              <tr>
+                <td class="mono"><strong>decline_action</strong><br>POST /voice/incidents/:id/decline</td>
+                <td>Records optional reason, snapshots raw probe evidence into <code>decision_feedback</code>, starts <code>watchForEngineerFix()</code>.</td>
+              </tr>
+            </tbody>
+          </table>
+
+          <p style="font-size: 12.5px; color: var(--ink-muted); margin-top: 8px;">
+            * Post-call webhook (<code>/elevenlabs-webhook</code>) tracks <code>initiated &rarr; answered / unanswered / failed</code>, retrying primary up to 2&times; before escalating to <code>backup-engineer</code>.
+          </p>
+        </div>
+      </div>
+
+      <div class="callout-bar">
+        <span><strong>Pre-authorised fast path:</strong> When a matching runbook has lifecycle <code>authorised</code>, <code>submit_investigation</code> verifies fresh probes and executes without phoning.</span>
+        <span class="tag-mono">answering &ne; approval</span>
+      </div>
+    </section>
+
+    <!-- ====================================================================
+         SLIDE 05: VERIFICATION, AUTO-DETECTED FIXES & UNIFIED MEMORY
+         ==================================================================== -->
+    <section class="slide" data-title="Verification & Unified Memory" data-sub="Stage 6 recovery thresholds, config fix watcher, and unified learning loop">
+      <div class="slide-head">
+        <div class="slide-head-main">
+          <span class="kicker">04 // stages 05–06 (workflows.ts)</span>
+          <h2>Measured recovery &amp; unified incident memory</h2>
+        </div>
+        <span class="slide-sub">verification decides recovery · declines need no spoken reason</span>
+      </div>
+
+      <div class="grid-12">
+        <!-- Left: Stage 6 Verification + Fix Watcher -->
+        <div class="pane col-5">
+          <div class="pane-label">
+            <span>05 // stage 6 recovery verification</span>
+            <span>polled every 5s (120s limit)</span>
+          </div>
+          <h3>All three thresholds required to close</h3>
+          <p style="margin-bottom: 8px;">
+            Mitigations set explicit state (<code>expectedPreviousValue</code>) rather than toggles. Recovery is never declared on silence:
+          </p>
+
+          <div class="metric-rows">
+            <div class="metric-row">
+              <span class="metric-fig">&ge; 10</span>
+              <div class="metric-desc">
+                <strong>Successful synthetic checkouts</strong>
+                <span>Correlated by incident <code>run_id</code> after execution timestamp.</span>
+              </div>
+            </div>
+            <div class="metric-row">
+              <span class="metric-fig">&ge; 30s</span>
+              <div class="metric-desc">
+                <strong>Sustained checkout window</strong>
+                <span>Span between first and last passing post-action checkout.</span>
+              </div>
+            </div>
+            <div class="metric-row">
+              <span class="metric-fig">&ge; 10</span>
+              <div class="metric-desc">
+                <strong>Matching Sentry checkout traces</strong>
+                <span>Fresh <code>op="checkout"</code> spans with <code>status="ok"</code> in Sentry.</span>
+              </div>
+            </div>
+          </div>
+
+          <p style="font-size: 12.5px; color: var(--ink-muted); margin-top: 8px;">
+            * If Sentry lags when checkouts pass, status logs <code>"functional checks passed; telemetry confirmation pending"</code> and escalates on timeout.
+          </p>
+        </div>
+
+        <!-- Right: Unified Learning Loop -->
+        <div class="pane col-7">
+          <div class="pane-label">
+            <span>06 // unified incident memory (decision_feedback + incidents.md + runbooks)</span>
+            <span>automatic closed-loop sync</span>
+          </div>
+          <h3>How both approvals and refusals become operational memory</h3>
+          <ul class="sg-list" style="margin-top: 8px;">
+            <li><strong>Decline snapshot (<code>evidenceSnapshot</code>):</strong> Declining a proposal—even <em>without</em> stating a reason—captures raw probe latencies (e.g. <code>payments:1802ms</code>), config, and failing stage into <code>decision_feedback</code>.</li>
+            <li><strong>Automatic manual-fix detection (<code>watchForEngineerFix</code>):</strong> After a decline, the backend polls <code>/config</code> every 5s. When the SWE switches <code>paymentProvider &rarr; backup</code> (or disables recs), it automatically records <code>manual_resolution_recorded</code> and runs full Stage 6 verification.</li>
+            <li><strong>Live Markdown sync (<code>syncIncidentsMarkdown</code>):</strong> Every decision and verified resolution automatically re-renders <code>backend/incidents.md</code> and generates a manifest-defined retrospective (separating mitigation from root-cause repair).</li>
+            <li><strong>Evaluated runbooks (<code>createLearnedRunbook</code>):</strong> Verified human <code>disable_recommendations</code> fixes draft a versioned runbook tested against <strong>13 deterministic cases</strong> (8 fixed + 5 held-out refusal/counterexample cases: <code>draft &rarr; evaluated &rarr; authorised &rarr; suspended</code>).</li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="callout-bar">
+        <span><strong>Safety invariant:</strong> Past lessons in <code>/tools/past_decisions</code> guide CREAO's next proposal but never expand the allowlist or bypass fresh probe gates.</span>
+        <span class="tag-mono">13/13 fixed &amp; held-out eval cases required</span>
+      </div>
+    </section>
+
+    <!-- ====================================================================
+         SLIDE 06: PRIVILEGE ISOLATION & END-TO-END VALIDATION ARC
+         ==================================================================== -->
+    <section class="slide" data-title="Trust & Validation Arc" data-sub="Token-scoped least privilege and the three verified learning scenarios">
+      <div class="slide-head">
+        <div class="slide-head-main">
+          <span class="kicker">05 // security &amp; end-to-end validation (selftest-workflows.ts)</span>
+          <h2>Credential isolation &amp; closed-loop validation scenarios</h2>
+        </div>
+        <span class="slide-sub">6 isolated bearer tokens · verified in automated stage 6–9 self-tests</span>
+      </div>
+
+      <div class="grid-12">
+        <!-- Left: Token & Actor Matrix -->
+        <div class="pane col-5">
+          <div class="pane-label">
+            <span>credential &amp; actor boundaries</span>
+            <span>strict least-authority</span>
+          </div>
+          <h3>Scoped tokens across services</h3>
+          <table class="sg-table" style="margin-top: 6px;">
+            <thead>
+              <tr>
+                <th>Actor / Token</th>
+                <th>Authorized Capability</th>
+                <th>Hard Restriction</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><strong>CREAO Agent</strong><br><code>TOOL_TOKEN</code></td>
+                <td>Read manifest, telemetry, probes, <code>past_decisions</code>; submit result</td>
+                <td>Cannot mutate app or trigger faults</td>
+              </tr>
+              <tr>
+                <td><strong>Voice Agent</strong><br><code>VOICE_TOOL_TOKEN</code></td>
+                <td>Read briefing; relay confirmed approve/decline</td>
+                <td>Cannot approve without confirmation</td>
+              </tr>
+              <tr>
+                <td><strong>Backend</strong><br><code>DEMO_PROBE/ACTION</code></td>
+                <td>Gate proposals, run 1 idempotent action, verify</td>
+                <td>Refuses non-<code>demo</code> environments</td>
+              </tr>
+              <tr>
+                <td><strong>Responders</strong><br><code>DASHBOARD_TOKEN</code></td>
+                <td>Approve/decline; <code>primary</code> alone authorises/suspends runbooks</td>
+                <td><code>backup</code> blocked until escalated</td>
+              </tr>
+              <tr>
+                <td><strong>Test Runner</strong><br><code>DEV_TOKEN</code></td>
+                <td>Inject controlled faults &amp; reset demo-app</td>
+                <td>Invisible to CREAO &amp; backend</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <!-- Right: 3 Validation Scenarios -->
+        <div class="pane col-7">
+          <div class="pane-label">
+            <span>implemented validation arc</span>
+            <span>proven in selftest-workflows.ts &amp; run-scenario.sh</span>
+          </div>
+          <h3>Three closed-loop scenarios</h3>
+
+          <div class="grid-3" style="margin-top: 8px;">
+            <div class="pipe-step" style="border-top-color: var(--warn);">
+              <div class="pipe-step-head">
+                <span class="pipe-num">scenario 01</span>
+                <span class="badge-mono badge-warn">refusal + watch</span>
+              </div>
+              <div class="pipe-title">Masked Pool Fault</div>
+              <p class="pipe-body">Recs time out (800ms) while payment probe is 1800ms. If <code>disable_recommendations</code> is proposed, Gate 2 blocks or SWE declines. Backend snapshots probes, detects SWE's switch to <code>backup</code>, verifies recovery, and syncs <code>incidents.md</code>.</p>
+              <div class="pipe-io">stored &rarr; decision_feedback</div>
+            </div>
+
+            <div class="pipe-step" style="border-top-color: var(--primary);">
+              <div class="pipe-step-head">
+                <span class="pipe-num">scenario 02</span>
+                <span class="badge-mono badge-neutral">learned fix</span>
+              </div>
+              <div class="pipe-title">Guided Recurrence</div>
+              <p class="pipe-body">Masked degradation recurs. CREAO reads <code>/tools/past_decisions</code>, matches fresh 1800ms payment probe against <code>evidence_when_declined</code>, cites <code>consulted_decisions</code>, and proposes <code>switch_payment_provider</code>. One phone approval resolves.</p>
+              <div class="pipe-io">0 wrong actions run</div>
+            </div>
+
+            <div class="pipe-step" style="border-top-color: var(--accent);">
+              <div class="pipe-step-head">
+                <span class="pipe-num">scenario 03</span>
+                <span class="badge-mono badge-ok">authorised</span>
+              </div>
+              <div class="pipe-title">Evaluated Runbook</div>
+              <p class="pipe-body">Genuine rec outage approved &amp; verified &rarr; drafts <code>checkout-disable-recommendations v1</code> (passes 13/13 fixed &amp; held-out cases). Primary responder authorises it; next genuine outage executes automatically if fresh payment probe is healthy.</p>
+              <div class="pipe-io">auto-mitigated &amp; verified</div>
+            </div>
+          </div>
+
+          <div class="pane-tinted" style="margin-top: 10px;">
+            <div class="pane-label" style="margin-bottom: 2px;">
+              <span>stage 9 controlled demo metrics (metrics.ts)</span>
+              <span class="mono">GET /dashboard-api/metrics</span>
+            </div>
+            <p style="font-size: 12.8px;">
+              Tracks <code>declinedProposals</code>, <code>declinesWithReason</code>, <code>authorisedRunbookExecutions</code>, <code>liveRunbookRefusals</code>, <code>correctRefusals</code> (6/6), <code>heldOutTotal</code> (5/5), and <code>averageAlertToVerifiedRecoveryMs</code>.
+            </p>
+          </div>
+        </div>
+      </div>
+
+      <div class="callout-bar">
+        <span><strong>Core result:</strong> Human interventions—including unspoken refusals—become tested, auditable incident memory while deterministic gates keep every mutation safe.</span>
+        <span class="tag-mono">secondshift // implementation verified</span>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- Bottom Running Footer -->
+  <footer class="deck-bottombar">
+    <div class="bottom-left">
+      <span class="folio-num" id="folio-num">01</span>
+      <span id="folio-total"> / 06</span>
+      <span style="margin-left: 12px;" id="folio-caption">Cover — SecondShift</span>
+    </div>
+    <div class="progress-dots" id="progress-dots"></div>
+    <div class="bottom-right">&larr;/&rarr; navigate &middot; [G] index &middot; [T] theme</div>
+  </footer>
+</div>
+
+<!-- Slide Index Overview Modal -->
+<div class="overview-modal" id="overview-modal">
+  <div class="slide-head">
+    <div class="slide-head-main">
+      <span class="kicker">index // contact sheet</span>
+      <h2>All slides (6)</h2>
+    </div>
+    <button class="ctrl-btn" id="btn-close-grid">[ESC] close</button>
   </div>
-</section>
+  <div class="overview-grid" id="overview-grid"></div>
+</div>
 
-<!-- 2 -->
-<section class="slide">
-  <h2>End-to-end pipeline</h2>
-  <div class="flow">
-    <div class="node" style="--c:var(--sentry)"><b>1 · Detect</b><span>App instrumented with Sentry: errors, structured logs, traces. Alert rule fires a signed webhook.</span></div>
-    <div class="arrow">&rarr;</div>
-    <div class="node" style="--c:var(--agent)"><b>2 · Collect context</b><span>Context agent pulls Sentry evidence + live probes, reads <code>incidents.md</code>, picks top 5 similar past issues.</span></div>
-    <div class="arrow">&rarr;</div>
-    <div class="node" style="--c:var(--rec)"><b>3 · Recommend</b><span>Recommendation agent proposes a fix grounded in evidence and precedent. Backend policy gate validates it.</span></div>
-    <div class="arrow">&rarr;</div>
-    <div class="node" style="--c:var(--voice)"><b>4 · Call the SWE</b><span>ElevenLabs voice agent over Photon SIP briefs the engineer, who approves or declines.</span></div>
-    <div class="arrow">&rarr;</div>
-    <div class="node" style="--c:var(--exec)"><b>5 · Act &amp; verify</b><span>Backend executes the approved action once, then verifies recovery with real traffic and fresh traces.</span></div>
-  </div>
-  <div class="store">
-    <div class="node" style="--c:var(--md)"><b>incidents.md</b><span>Past issues &amp; resolutions. Curated manually by the SWE. Read-only to agents.</span></div>
-    <div class="node" style="--c:var(--muted)"><b>Live incident state</b><span>Current incident, timeline, pending action, call status (small backend store).</span></div>
-    <div class="node" style="--c:var(--md)"><b>6 · Close the loop</b><span>System drafts a suggested row; the SWE reviews and commits it to <code>incidents.md</code>.</span></div>
-  </div>
-</section>
-
-<!-- 3 -->
-<section class="slide">
-  <h2><span style="color:var(--sentry)">1 ·</span> Detection with Sentry</h2>
-  <div class="grid g2">
-    <div class="card"><h4>Instrumentation (demo app)</h4><ul>
-      <li>Errors on failed checkouts</li>
-      <li>Spans: checkout &rarr; recommendations &rarr; payment</li>
-      <li>Structured logs: dependency outcomes, flag changes</li>
-      <li>Attributes: service, env, release, request &amp; run ID</li></ul></div>
-    <div class="card"><h4>Alert intake (backend)</h4><ul>
-      <li>Verify the webhook's HMAC signature</li>
-      <li>Save, acknowledge fast, process asynchronously</li>
-      <li>Same delivery retried &rarr; processed once</li>
-      <li>Same issue + env recurring &rarr; attach, don't re-page</li>
-      <li>Open incident, assign primary &amp; backup owner</li></ul></div>
-  </div>
-  <p class="muted">Output: an incident ID handed to the context agent.</p>
-</section>
-
-<!-- 4 -->
-<section class="slide">
-  <h2><span style="color:var(--agent)">2 ·</span> Context agent + <code>incidents.md</code></h2>
-  <div class="grid g2">
-    <div class="card"><h4>Gathers fresh evidence</h4><ul>
-      <li><code>sentry_evidence</code> — errors, logs, spans for the window</li>
-      <li><code>feature_config</code> — current flags &amp; provider</li>
-      <li><code>probe</code> — live health of each dependency</li>
-      <li>Every item gets a <code>source_id</code> the backend can check</li></ul></div>
-    <div class="card"><h4>Recalls similar past issues</h4><ul>
-      <li>Parse the table in <code>incidents.md</code></li>
-      <li>Filter in code: same service / failing stage</li>
-      <li>LLM ranks remaining rows on symptoms + evidence</li>
-      <li>Return <b>top 5</b> with a one-line "why similar"</li></ul></div>
-  </div>
-  <pre>| ID    | Date       | Service  | Symptom / error signature              | Failing stage   | Root cause                      | Fix applied              | Outcome   | Follow-up                       |
-|-------|------------|----------|----------------------------------------|-----------------|---------------------------------|--------------------------|-----------|---------------------------------|
-| INC-7 | 2026-10-12 | checkout | recommendation lookup timed out 800ms  | recommendations | recommendation service outage   | disable_recommendations  | recovered | make checkout tolerate outage   |
-| INC-9 | 2026-10-15 | checkout | recommendation timeout, payment slow   | recommendations | payment provider saturating pool| switch_payment_provider  | recovered | isolate connection pools        |</pre>
-</section>
-
-<!-- 5 -->
-<section class="slide">
-  <h2>Hand-off: the context bundle</h2>
-  <div class="grid g2">
-    <pre>{
-  "incident_id": 12,
-  "impact": "checkout 504s at recommendations since 14:02",
-  "evidence": [
-    { "source": "demo.probe", "source_id": "probe:payments:…",
-      "healthy": true, "latencyMs": 1840 },
-    { "source": "sentry.error", "source_id": "evt_…",
-      "failed_stage": "recommendations" }
-  ],
-  "similar_issues": [
-    { "id": "INC-9", "why": "same symptom AND slow payment probe",
-      "fix": "switch_payment_provider", "outcome": "recovered" },
-    { "id": "INC-7", "why": "same symptom, payment was fast",
-      "fix": "disable_recommendations", "outcome": "recovered" }
-    /* … up to 5 */
-  ]
-}</pre>
-    <div class="card"><h4>Rules</h4><ul>
-      <li>Past issues are <b>guidance, not evidence</b></li>
-      <li>Similar symptoms &ne; same cause — check what differs now</li>
-      <li>No match &rarr; empty list, no invented precedent</li>
-      <li>Agent 1 never proposes; it only assembles context</li></ul></div>
-  </div>
-</section>
-
-<!-- 6 -->
-<section class="slide">
-  <h2><span style="color:var(--rec)">3 ·</span> Recommendation agent + policy gate</h2>
-  <div class="grid g2">
-    <div class="card"><h4>Agent output</h4><ul>
-      <li>Hypotheses: <i>supported / inconclusive / contradicted</i> — no % confidence</li>
-      <li>Proposed action from the allowed list + tradeoff</li>
-      <li><code>based_on</code>: which past issue IDs it followed or rejected, and why</li>
-      <li>A short spoken briefing for the call</li></ul></div>
-    <div class="card"><h4>Backend gate (deterministic)</h4><ul>
-      <li>Cited <code>source_id</code>s must exist and be &lt; 15 min old</li>
-      <li>Exactly one supported cause</li>
-      <li>Action on allowlist and matches that cause</li>
-      <li>Target environment = <code>demo</code></li>
-      <li>Fails &rarr; escalate to the SWE with no proposal</li></ul></div>
-  </div>
-  <p class="muted">The model proposes. The backend decides what may be offered. The human decides what runs.</p>
-</section>
-
-<!-- 7 -->
-<section class="slide">
-  <h2><span style="color:var(--voice)">4 ·</span> The phone call — ElevenLabs + Photon</h2>
-  <p>Photon provides the phone number and SIP trunk; ElevenLabs runs the conversation. The voice agent speaks from the same incident record.</p>
-  <table>
-    <tr><th>SWE says</th><th>Voice tool</th><th>Backend effect</th></tr>
-    <tr><td>"Explain the evidence"</td><td><code>explain_evidence</code></td><td>Reads briefing, hypotheses, similar issues</td></tr>
-    <tr><td>"Yes, do it"</td><td><code>approve_action</code></td><td>Executes the exact pending action</td></tr>
-    <tr><td>"No" / "I'll handle it"</td><td><code>decline_action</code></td><td>Records decline; watches for the SWE's own fix and verifies it</td></tr>
-  </table>
-  <p class="muted">Unanswered &rarr; bounded retry &rarr; escalate to backup. Answering is not approval.</p>
-</section>
-
-<!-- 8 -->
-<section class="slide">
-  <h2><span style="color:var(--exec)">5 ·</span> Execute &amp; verify</h2>
-  <div class="grid g3">
-    <div class="card"><h4>Before acting</h4><ul>
-      <li>Re-run probes &amp; config check</li>
-      <li>Approval bound to action, incident, responder, expiry</li>
-      <li>One mutation per action — retries are no-ops</li></ul></div>
-    <div class="card"><h4>Verification</h4><ul>
-      <li>&ge; 10 successful synthetic checkouts</li>
-      <li>Spanning &ge; 30 seconds</li>
-      <li>&ge; 10 successful Sentry checkout traces</li></ul></div>
-    <div class="card"><h4>If it fails</h4><ul>
-      <li>No automatic retry</li>
-      <li>Escalate to backup</li>
-      <li>Never reported as "resolved"</li></ul></div>
-  </div>
-  <p class="muted">SWE fixed it themselves? The backend detects the config change and runs the same verification.</p>
-</section>
-
-<!-- 9 -->
-<section class="slide">
-  <h2><span style="color:var(--md)">6 ·</span> Closing the loop</h2>
-  <div class="grid g2">
-    <div class="card"><h4>After verified recovery</h4><ul>
-      <li>System drafts a suggested <code>incidents.md</code> row: symptom, evidence at the time, fix, outcome, follow-up</li>
-      <li>Shown on the dashboard / in the retrospective</li>
-      <li>SWE edits and commits it — the file stays human-curated</li></ul></div>
-    <div class="card"><h4>Why a markdown file</h4><ul>
-      <li>Readable and reviewable in a PR</li>
-      <li>SWE controls what the agent learns from</li>
-      <li>Bad lessons are deleted with a line edit</li>
-      <li>No hidden state shaping recommendations</li></ul></div>
-  </div>
-</section>
-
-<!-- 10 -->
-<section class="slide">
-  <h2>Trust boundaries</h2>
-  <table>
-    <tr><th>Component</th><th>Can</th><th>Cannot</th></tr>
-    <tr><td>Context agent</td><td>Read Sentry, probes, config, <code>incidents.md</code></td><td>Propose or change anything</td></tr>
-    <tr><td>Recommendation agent</td><td>Submit one structured proposal</td><td>Execute, pick non-allowlisted actions</td></tr>
-    <tr><td>Voice agent</td><td>Brief, relay approve/decline</td><td>Approve without explicit confirmation</td></tr>
-    <tr><td>Backend</td><td>Execute approved action, verify</td><td>Inject faults, touch non-demo envs</td></tr>
-    <tr><td>SWE</td><td>Approve, decline, fix, curate <code>incidents.md</code></td><td>—</td></tr>
-  </table>
-</section>
-
-<!-- 11 -->
-<section class="slide">
-  <h2>Demo story</h2>
-  <div class="grid g3">
-    <div class="card"><h4>Incident A</h4><p>Recommendations time out. No precedent. Agent proposes <i>disable recommendations</i>. SWE approves by phone. Verified recovered. SWE adds INC-7.</p></div>
-    <div class="card"><h4>Incident B</h4><p>Same symptom, but payment probe is slow. INC-7 is similar — but the gate blocks disabling recommendations. SWE declines, switches provider. Detected and verified. SWE adds INC-9.</p></div>
-    <div class="card"><h4>Incident C</h4><p>Same masked pattern returns. Context agent surfaces INC-9 first. Agent recommends <i>switch payment provider</i>, citing INC-9. One phone "yes" &rarr; recovered.</p></div>
-  </div>
-  <p class="big" style="margin-top:12px">Each fix makes the next recommendation better — and a human stays in control of every change.</p>
-</section>
-
-<div class="footer" id="counter"></div>
-<div class="hint">&larr; / &rarr; or click to navigate</div>
 <script>
-  const slides = [...document.querySelectorAll('.slide')];
-  let i = 0;
-  const show = (n) => { slides[i].classList.remove('active'); i = (n + slides.length) % slides.length; slides[i].classList.add('active');
-    document.getElementById('counter').textContent = `${i + 1} / ${slides.length}`; };
-  document.addEventListener('keydown', (e) => {
-    if (['ArrowRight','PageDown',' '].includes(e.key)) show(i + 1);
-    if (['ArrowLeft','PageUp'].includes(e.key)) show(i - 1);
-  });
-  document.addEventListener('click', (e) => show(e.clientX > innerWidth / 2 ? i + 1 : i - 1));
-  show(0);
+  (() => {
+    const slides = Array.from(document.querySelectorAll('.slide'));
+    const folioNum = document.getElementById('folio-num');
+    const folioTotal = document.getElementById('folio-total');
+    const folioCaption = document.getElementById('folio-caption');
+    const dotsContainer = document.getElementById('progress-dots');
+    const overviewModal = document.getElementById('overview-modal');
+    const overviewGrid = document.getElementById('overview-grid');
+    let current = 0;
+
+    folioTotal.textContent = ` / ${String(slides.length).padStart(2, '0')}`;
+
+    // Build progress dots and overview cards
+    slides.forEach((s, idx) => {
+      const dot = document.createElement('button');
+      dot.className = 'progress-dot';
+      dot.title = s.dataset.title || `Slide ${idx + 1}`;
+      dot.addEventListener('click', (e) => {
+        e.stopPropagation();
+        goTo(idx);
+      });
+      dotsContainer.appendChild(dot);
+
+      const card = document.createElement('button');
+      card.className = 'overview-card';
+      card.innerHTML = `
+        <div class="ov-num">${String(idx + 1).padStart(2, '0')} // slide</div>
+        <div class="ov-title">${s.dataset.title || ''}</div>
+        <div class="ov-sub">${s.dataset.sub || ''}</div>
+      `;
+      card.addEventListener('click', () => {
+        goTo(idx);
+        toggleOverview(false);
+      });
+      overviewGrid.appendChild(card);
+    });
+
+    const dots = Array.from(dotsContainer.children);
+    const cards = Array.from(overviewGrid.children);
+
+    function goTo(index) {
+      slides[current].classList.remove('active');
+      dots[current].classList.remove('active');
+      cards[current].classList.remove('current');
+
+      current = (index + slides.length) % slides.length;
+
+      slides[current].classList.add('active');
+      dots[current].classList.add('active');
+      cards[current].classList.add('current');
+
+      folioNum.textContent = String(current + 1).padStart(2, '0');
+      folioCaption.textContent = slides[current].dataset.title || '';
+    }
+
+    function toggleOverview(force) {
+      const next = typeof force === 'boolean' ? force : !overviewModal.classList.contains('open');
+      overviewModal.classList.toggle('open', next);
+    }
+
+    function toggleTheme() {
+      const html = document.documentElement;
+      const next = html.getAttribute('data-theme') === 'carbon' ? 'paper' : 'carbon';
+      html.setAttribute('data-theme', next);
+    }
+
+    document.getElementById('btn-prev').addEventListener('click', (e) => { e.stopPropagation(); goTo(current - 1); });
+    document.getElementById('btn-next').addEventListener('click', (e) => { e.stopPropagation(); goTo(current + 1); });
+    document.getElementById('btn-grid').addEventListener('click', (e) => { e.stopPropagation(); toggleOverview(); });
+    document.getElementById('btn-close-grid').addEventListener('click', (e) => { e.stopPropagation(); toggleOverview(false); });
+    document.getElementById('btn-theme').addEventListener('click', (e) => { e.stopPropagation(); toggleTheme(); });
+
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') {
+        toggleOverview(false);
+        return;
+      }
+      if (e.key === 'g' || e.key === 'G') {
+        toggleOverview();
+        return;
+      }
+      if (e.key === 't' || e.key === 'T') {
+        toggleTheme();
+        return;
+      }
+      if (overviewModal.classList.contains('open')) return;
+      if (['ArrowRight', 'PageDown', ' '].includes(e.key)) {
+        e.preventDefault();
+        goTo(current + 1);
+      } else if (['ArrowLeft', 'PageUp'].includes(e.key)) {
+        e.preventDefault();
+        goTo(current - 1);
+      }
+    });
+
+    goTo(0);
+  })();
 </script>
 </body>
 </html>
