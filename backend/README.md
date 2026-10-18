@@ -85,7 +85,7 @@ To adopt SecondShift for another service in 4 steps:
 4. Review the evidence, investigation, pending action, and phone-call record in the dashboard. CREAO's `POST /tools/submit_investigation` must cite source IDs previously retrieved through incident-scoped tools.
 5. A configured responder approves the exact pending action in the dashboard or on the ElevenLabs call (`approve_action`, explicit confirmation required). The backend rechecks the recommendation and payment probes and current feature configuration before the single idempotent mutation.
 6. Keep synthetic traffic running. Recovery requires the functional/trace thresholds above. Payment failures, mixed dependency failures, stale evidence, rejected actions, and incomplete telemetry remain unresolved and escalate.
-7. A verified human-guided intervention produces a versioned draft runbook and fixed evaluation results. Only the primary responder can separately authorise an evaluated version. Matching recurrence can then run that bounded action only after a fresh backend check confirms applicability. Runbooks can be suspended.
+7. Every verified recovery—whether from an **approved** proposal or a **declined** proposal where the engineer fixed the issue themselves—is recorded in `decision_feedback` and automatically synced to [`incidents.md`](./incidents.md) alongside a versioned runbook and fixed evaluation results. On future incidents, CREAO reads `/tools/past_decisions` (`decision_feedback` + `incidents.md` + `runbooks`): if the procedure is pre-authorised (`authorised`), the backend executes it automatically after fresh probe checks; otherwise it calls the engineer with the remembered fix.
 
 ## API boundaries
 

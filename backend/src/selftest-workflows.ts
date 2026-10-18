@@ -5,7 +5,7 @@ import type { AddressInfo } from "node:net";
 import { db } from "./db.js";
 import { addEvidence, getIncident, incidentDetail, parseSentryAlert, processAlert, transition } from "./incidents.js";
 import { computeMetrics } from "./metrics.js";
-import { approveAndExecute, authoriseRunbook, declineAction, executeAuthorisedRunbook, pastDecisions, recordManualResolution, suspendRunbook, verificationDeps } from "./workflows.js";
+import { approveAndExecute, authoriseRunbook, declineAction, executeAuthorisedRunbook, pastDecisions, recordManualResolution, renderIncidentsMarkdown, suspendRunbook, verificationDeps } from "./workflows.js";
 
 // Keep decline watchers quiet unless a test asks for them.
 process.env.FIX_WATCH_INTERVAL_MS = "3600000";
@@ -249,6 +249,13 @@ out = await approveAndExecute(inc2.id, inc2.actionId, PRIMARY) as any;
 check("incident 2: the provider switch executes after approval and records the previous value", out.status === "verifying" && out.result.previousValue === "primary" && world.actionCalls === 1);
 check("incident 2 recovers via the backend executor", await waitFor(() => getIncident(inc2.id).status === "recovered"), getIncident(inc2.id).status);
 check("the declined action never ran in either incident", (db.prepare(`SELECT COUNT(*) c FROM action_executions e JOIN proposed_actions p ON p.id = e.proposed_action_id WHERE p.id = ?`).get(inc1.actionId) as any).c === 0);
+const approvedFeedback = db.prepare(`SELECT * FROM decision_feedback WHERE incident_id = ?`).get(inc2.id) as any;
+check("approved actions also record into decision_feedback with verified resolution",
+  approvedFeedback?.decision === "approved" && approvedFeedback?.action === "switch_payment_provider" && /switch_payment_provider restored checkout/.test(approvedFeedback?.resolution ?? ""),
+  JSON.stringify(approvedFeedback));
+const mdTable = renderIncidentsMarkdown();
+check("incidents.md table includes both approved and declined-then-fixed incidents",
+  mdTable.includes(`INC-${first.id}`) && mdTable.includes(`INC-${inc1.id}`) && mdTable.includes(`INC-${inc2.id}`));
 
 reset(); world.provider = "backup"; world.payLatency = 1800; a = awaitingDecision({ action: "switch_payment_provider" });
 check("switch refused when payments are already on the backup provider", await rejects(approveAndExecute(a.id, a.actionId, PRIMARY)) && world.actionCalls === 0);

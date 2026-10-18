@@ -9,7 +9,7 @@ import { startInvestigation, submitInvestigation, validateResult, onRunFinished 
 import { reportBackendError } from "./monitoring.js";
 import { acknowledge, addEvidence, getIncident, incidentDetail, listIncidents, parseSentryAlert, processAlert, takeOver } from "./incidents.js";
 import { DEPENDENCY_MAP, manifest } from "./manifest.js";
-import { approveAndExecute, authoriseRunbook, declineAction, executeAuthorisedRunbook, pastDecisions, recordManualResolution, suspendRunbook, verifyAuthorisedRunbookApplicability } from "./workflows.js";
+import { approveAndExecute, authoriseRunbook, declineAction, executeAuthorisedRunbook, pastDecisions, recordManualResolution, renderIncidentsMarkdown, suspendRunbook, verifyAuthorisedRunbookApplicability } from "./workflows.js";
 import { approveProposedAction, getCall, getLatestCallForIncident, getVoiceBriefing, initiateCall, notifyResponder, recordCallOutcome, type CallOutcome, voiceDeclineAction } from "./voice.js";
 
 const PORT = Number(process.env.PORT ?? 3000);
@@ -162,6 +162,14 @@ app.post("/tools/submit_investigation", requireToken, async (req, res) => {
   try {
     let backendVerifiedRunbook = false;
     const validation = validateResult(req.body);
+    if (validation.ok && !validation.value.applicable_runbook && validation.value.recommendation === "permit_runbook") {
+      const authRb = db.prepare(`SELECT runbook_id, version FROM runbook_versions WHERE lifecycle = 'authorised' ORDER BY version DESC LIMIT 1`)
+        .get() as { runbook_id: string; version: number } | undefined;
+      if (authRb) {
+        req.body.applicable_runbook = { id: authRb.runbook_id, version: authRb.version, preconditions_met: true };
+        validation.value.applicable_runbook = req.body.applicable_runbook;
+      }
+    }
     if (validation.ok && validation.value.applicable_runbook) {
       const checked = await verifyAuthorisedRunbookApplicability(
         Number(validation.value.incident_id),
@@ -237,6 +245,14 @@ app.get("/tools/past_decisions", requireToken, (req, res) => {
   const out = pastDecisions(Number(req.query.incident_id));
   if (!out) return res.status(404).json({ error: "incident not found" });
   res.json(out);
+});
+
+app.get("/tools/incidents_md", requireToken, (_req, res) => {
+  res.type("text/markdown").send(renderIncidentsMarkdown());
+});
+
+app.get("/dashboard-api/incidents-md", dashboardAuth, (_req, res) => {
+  res.json({ markdown: renderIncidentsMarkdown() });
 });
 
 app.get("/tools/runbooks", requireToken, (_req, res) => {

@@ -80,12 +80,11 @@ Stage 4 — Implement evidence-based CREAO investigation (Plug-and-Play Manifest
 Define the target service's architecture declaratively in `service-manifest.json` (also attached in CREAO's **Files** tab and served at `GET /tools/service_manifest`) so the CREAO agent template is reusable across any software project without rewriting backend policy code.
 Give CREAO narrowly defined tools:
 - Retrieve the service manifest (`/tools/service_manifest` or attached `service-manifest.json` in CREAO Files).
-- Retrieve Sentry evidence.
-- Read legitimate feature configuration and recent changes.
-- Run read-only dependency probes declared in the manifest.
-- Retrieve candidate runbooks.
-- Retrieve past engineer decisions, including declined actions with their reasons, for the same service and similar evidence.
-- Submit a structured investigation result.
+- Retrieve Sentry evidence (`/tools/sentry_evidence`).
+- Read legitimate feature configuration and recent changes (`/tools/feature_config`).
+- Run read-only dependency probes declared in the manifest (`/tools/probe`).
+- Retrieve unified past incidents, engineer decisions (both approved and declined-then-fixed), raw evidence snapshots, verified resolutions, `incidents.md`, and any pre-authorised runbooks (`/tools/past_decisions`).
+- Submit a structured investigation result (`/tools/submit_investigation`).
 The result should contain:
 - Observed impact and its measurement source.
 - Leading hypothesis.
@@ -142,17 +141,16 @@ For example, a demo-specific recovery rule could require ten successful syntheti
 If Sentry data is delayed, display “functional checks passed; telemetry confirmation pending.” Silence or absent errors alone is insufficient.
 If mitigation fails, stop and escalate. Do not repeatedly retry the same ineffective action or automatically re-enable a known failing dependency.
 Done when: success is supported by measured results, and failed mitigation never becomes a false “resolved” incident.
-Stage 7 — Learn a runbook and evaluate it
-After a verified human-guided intervention, CREAO proposes a structured procedure derived from:
-- Incident evidence.
-- The engineer’s approved action.
-- Actual execution.
-- Recovery observations.
-- Relevant environment and release context.
-- Declined proposals and the engineer's stated reasons, and what the engineer did instead.
-Its output includes preconditions, disqualifying conditions, the allowed action, verification rules, and escalation behaviour.
-Store it as versioned structured data; generate readable Markdown for explanation. This is workflow learning, not RLHF.
-Use a lifecycle:
+Stage 7 — Unified Incident Memory (`decision_feedback` + `incidents.md`) and Pre-Authorised Runbooks
+Every verified incident resolution—whether the engineer **approved** the proposed action OR **declined** it and fixed the application themselves—is recorded into the unified `decision_feedback` store and automatically synced to `backend/incidents.md` with:
+- Incident evidence snapshot (raw dependency probe latencies, configuration, and failing stage).
+- What was proposed and whether the engineer approved or declined it.
+- What action actually restored service, recorded only after Stage 6 recovery verification passes.
+When a new incident occurs, CREAO calls `/tools/past_decisions` to check if a similar incident happened before:
+- If a matching incident exists and its runbook is **authorised** (pre-approved for automation), the backend verifies fresh probes and executes the action automatically.
+- If a matching incident exists and is **not** pre-authorised for automation, CREAO proposes that same verified fix and calls the engineer on the phone to approve it.
+- If no matching incident exists, CREAO evaluates the fresh evidence from first principles, proposes a bounded mitigation, and calls the engineer.
+Use a lifecycle for automated runbooks:
 draft → evaluated → authorised → suspended
 Passing tests and permission to run automatically are separate decisions. Approval of one incident does not authorise all future executions.
 Evaluate both the applicability decision and the resulting action:

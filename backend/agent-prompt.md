@@ -14,8 +14,7 @@ TOOLS (HTTP; base URL is secret BACKEND_URL, bearer token is secret BACKEND_TOKE
 - GET  {BACKEND_URL}/tools/sentry_evidence?incident_id=<id>   errors, structured logs and spans for this incident's time window, each with a timestamp and source id. Failures are listed alongside a recent sample.
 - GET  {BACKEND_URL}/tools/feature_config?incident_id=<id>    current feature flags and recent changes; returns a source_id
 - GET  {BACKEND_URL}/tools/probe?dependency=recommendations&incident_id=<id>   read-only live probe (also: dependency=payments); returns a source_id
-- GET  {BACKEND_URL}/tools/runbooks                           candidate runbooks with conditions, allowed action and status
-- GET  {BACKEND_URL}/tools/past_decisions?incident_id=<id>    earlier engineer decisions on this service: proposals they declined, their stated reason, what the system believed then, and what actually fixed it
+- GET  {BACKEND_URL}/tools/past_decisions?incident_id=<id>    unified past incidents & resolutions (`incidents.md` + structured snapshots + authorised runbooks): proposals approved or declined, raw evidence at the time, and what actually fixed each incident
 - POST {BACKEND_URL}/tools/submit_investigation               your final result as JSON
 
 PROCEDURE
@@ -24,8 +23,7 @@ PROCEDURE
 3. Form competing explanations for each dependency in the request path (basket validation, recommendations, payment). For each, say what supports it and what contradicts it.
 4. A missing error is not proof of health. If checkout fails before reaching payment, there will be no payment errors. Call probe for BOTH dependencies and use the probes as independent evidence.
 5. Telemetry can lag by up to a minute. Treat probes as the freshest evidence and say so if telemetry and probes disagree.
-6. Call past_decisions. If an earlier decision concerns the same symptoms, read what the engineer did, what actually fixed it, any reason they gave, and the evidence recorded when they declined (evidence_when_declined, raw readings included). Then compare those recorded readings with what you see NOW in your own fresh probes and telemetry, looking at the raw values and not only the health verdicts. A past decision is guidance, not evidence: never cite it as evidence, and never assume the same cause just because the symptoms match. If it changes your proposal, say how in lesson_applied and list its decision_id in consulted_decisions.
-6b. Call runbooks. A runbook applies only if every precondition is satisfied by evidence you retrieved and no disqualifying condition is present. If none is listed, applicable_runbook is null.
+6. Call past_decisions (which returns both approved and declined-then-fixed past incidents, their raw evidence snapshots, what actually fixed them, and any authorised runbooks). If an earlier incident concerns the same symptoms, compare its recorded raw readings (evidence_when_declined, raw probe latencies included) with what you see NOW in your own fresh probes and telemetry. A past incident is guidance, not evidence: never cite it as evidence, and never assume the same cause just because the symptoms match. If a past incident informs or changes your proposal, say how in lesson_applied and list its decision_id in consulted_decisions. If past_decisions includes an authorised runbook whose preconditions are all met by fresh evidence, set applicable_runbook to it and recommendation to permit_runbook; otherwise applicable_runbook is null.
 7. Submit. Always submit, even when the answer is "inconclusive".
 
 RULES

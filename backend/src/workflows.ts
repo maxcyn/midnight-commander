@@ -1,8 +1,12 @@
+import { writeFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import { db } from "./db.js";
 import { addTimeline, escalate, getIncident, transition } from "./incidents.js";
 import { DEPENDENCY_MAP, manifest } from "./manifest.js";
 import { reportBackendError } from "./monitoring.js";
 import { getEvidence } from "./sentry.js";
+
+const incidentsMdPath = fileURLToPath(new URL("../incidents.md", import.meta.url));
 
 const now = () => new Date().toISOString();
 const demoUrl = () => process.env.DEMO_APP_URL ?? "http://localhost:4000";
@@ -156,6 +160,7 @@ export function declineAction(incidentId: number, actionId: number, actor: strin
       r ? JSON.stringify({ impact: r.impact?.summary, hypotheses: (r.hypotheses ?? []).map((h: any) => `${h.cause}:${h.status}`), proposed: r.proposed_action?.action ?? null }) : null,
       JSON.stringify(evidenceSnapshot(incidentId)), now());
     // The engineer needs to say nothing more: when they make the correct change themselves, the backend notices.
+    syncIncidentsMarkdown();
     watchForEngineerFix(incidentId, actor);
   }
   return { ok: true, actionId, status: expired ? "expired" : "rejected", reasonRecorded: !expired && !!why };
@@ -267,6 +272,25 @@ async function executeAction(
     transition(incidentId, "mitigating", actor, { actionId, executionId, approval: runbook ? "authorised_runbook" : "human" });
     addTimeline(incidentId, actor, runbook ? "runbook_action_authorised" : "action_approved",
       { actionId, executionId, role, runbook });
+    if (!runbook) {
+      const inv = db.prepare(`SELECT result FROM investigations WHERE incident_id = ? AND result IS NOT NULL ORDER BY id DESC LIMIT 1`)
+        .get(incidentId) as { result: string } | undefined;
+      const r = inv ? JSON.parse(inv.result) : null;
+      db.prepare(
+        `INSERT OR IGNORE INTO decision_feedback (incident_id, proposed_action_id, service, environment, action, decision, reason, responder, diagnosis, evidence_snapshot, decided_at)
+         VALUES (?, ?, ?, ?, ?, 'approved', NULL, ?, ?, ?, ?)`,
+      ).run(
+        incidentId,
+        actionId,
+        incident.service,
+        incident.environment,
+        action.action,
+        actor,
+        r ? JSON.stringify({ impact: r.impact?.summary, hypotheses: (r.hypotheses ?? []).map((h: any) => `${h.cause}:${h.status}`), proposed: r.proposed_action?.action ?? null }) : null,
+        JSON.stringify(evidenceSnapshot(incidentId)),
+        now(),
+      );
+    }
     db.exec("COMMIT");
   } catch (error) {
     db.exec("ROLLBACK");
@@ -510,19 +534,82 @@ function finishRecovery(executionId: number, incidentId: number, result: Record<
   db.prepare(`INSERT OR REPLACE INTO retrospectives (incident_id, summary, unresolved_work, generated_at) VALUES (?, ?, ?, ?)`)
     .run(incidentId, outcome.summary, outcome.unresolved, now());
   addTimeline(incidentId, "system", "retrospective_generated", { summary: outcome.summary, followUp: outcome.followUp });
-  // Close the loop on any declined proposal: record what actually restored service, for later investigations.
+  // Close the loop on any approved or declined proposal: record what actually restored service, for later investigations.
   const how = execution.actor.startsWith("manual:")
     ? `${execution.action} was applied by the engineer (${execution.actor.slice(7)}): ${String(JSON.parse(execution.result ?? "{}").note ?? "no note").replace(/[.\s]+$/, "")}. Checkout recovered after verification.`
     : `${execution.action} restored checkout after verification.`;
-  db.prepare(`UPDATE decision_feedback SET resolution = ? WHERE incident_id = ? AND resolution IS NULL`).run(how, incidentId);
+  const updated = db.prepare(`UPDATE decision_feedback SET resolution = ? WHERE incident_id = ? AND resolution IS NULL`).run(how, incidentId);
+  if (updated.changes === 0 && !execution.actor.startsWith("runbook:")) {
+    const inc = getIncident(incidentId);
+    const execRow = db.prepare(`SELECT proposed_action_id FROM action_executions WHERE id = ?`).get(executionId) as { proposed_action_id: number };
+    db.prepare(
+      `INSERT OR IGNORE INTO decision_feedback (incident_id, proposed_action_id, service, environment, action, decision, reason, responder, diagnosis, evidence_snapshot, resolution, decided_at)
+       VALUES (?, ?, ?, ?, ?, ?, NULL, ?, NULL, ?, ?, ?)`,
+    ).run(
+      incidentId,
+      execRow.proposed_action_id,
+      inc.service,
+      inc.environment,
+      execution.action,
+      execution.actor.startsWith("manual:") ? "manual" : "approved",
+      execution.actor.replace(/^manual:/, ""),
+      JSON.stringify(evidenceSnapshot(incidentId)),
+      how,
+      now(),
+    );
+  }
+  syncIncidentsMarkdown();
+}
+
+export function renderIncidentsMarkdown(service = manifest.service, environment = manifest.environment): string {
+  const rows = db.prepare(
+    `SELECT df.id, df.incident_id, df.service, df.environment, df.action, df.decision, df.reason, df.evidence_snapshot, df.resolution, df.decided_at,
+            i.title, i.status, r.summary AS retro_summary, r.unresolved_work AS retro_followup
+     FROM decision_feedback df
+     JOIN incidents i ON i.id = df.incident_id
+     LEFT JOIN retrospectives r ON r.incident_id = df.incident_id
+     WHERE df.service = ? AND df.environment = ?
+     ORDER BY df.id ASC`,
+  ).all(service, environment) as any[];
+
+  const lines = [
+    "# Past Incidents & Verified Resolutions",
+    "",
+    "| ID | Date | Service | Symptom | Evidence Snapshot | Decision | Verified Fix Applied | Outcome | Follow-up |",
+    "|---|---|---|---|---|---|---|---|---|",
+  ];
+  for (const r of rows) {
+    const snap = r.evidence_snapshot ? JSON.parse(r.evidence_snapshot) : {};
+    const probes = snap.probes
+      ? Object.entries(snap.probes as Record<string, any>)
+          .map(([k, v]) => `${k}:${v.healthy ? "ok" : "fail"}(${v.latencyMs ?? "-"}ms)`)
+          .join(", ")
+      : "—";
+    const decisionLabel = r.decision === "declined"
+      ? `declined ${r.action}${r.reason ? ` (${r.reason})` : ""}`
+      : `${r.decision} ${r.action}`;
+    lines.push(
+      `| INC-${r.incident_id} (D-${r.id}) | ${String(r.decided_at).slice(0, 10)} | ${r.service} | ${String(r.title).replace(/\|/g, "/")} | ${probes} | ${decisionLabel.replace(/\|/g, "/")} | ${(r.resolution ?? "pending verification").replace(/\|/g, "/")} | ${r.status} | ${(r.retro_followup ?? "—").replace(/\|/g, "/")} |`,
+    );
+  }
+  return lines.join("\n") + "\n";
+}
+
+export function syncIncidentsMarkdown() {
+  if (process.env.DB_PATH === ":memory:") return;
+  try {
+    writeFileSync(incidentsMdPath, renderIncidentsMarkdown());
+  } catch (err) {
+    console.error("[incidents.md] sync failed:", err);
+  }
 }
 
 const RETROSPECTIVES: Record<string, { summary: string; unresolved: string; followUp: string }> = Object.fromEntries(
   manifest.allowed_actions.map((a) => [a.action, a.retrospective]),
 );
 
-// Earlier engineer decisions on this service and environment, for the investigator. They inform a proposal and
-// never grant permission; the executor still checks fresh evidence before anything runs.
+// Earlier engineer decisions and verified fixes on this service and environment (both approved and declined-then-fixed),
+// plus any authorised runbooks and the rendered incidents.md table.
 export function pastDecisions(incidentId: number) {
   const inc = getIncident(incidentId);
   if (!inc) return undefined;
@@ -530,6 +617,9 @@ export function pastDecisions(incidentId: number) {
     `SELECT id, incident_id, action, decision, reason, diagnosis, evidence_snapshot, resolution, decided_at FROM decision_feedback
      WHERE service = ? AND environment = ? AND incident_id != ? ORDER BY id DESC LIMIT 10`,
   ).all(inc.service, inc.environment, inc.id) as any[];
+  const runbooks = db.prepare(
+    `SELECT runbook_id, version, lifecycle, spec FROM runbook_versions WHERE lifecycle IN ('evaluated','authorised') ORDER BY runbook_id, version DESC`,
+  ).all() as any[];
   return {
     note: "These inform your proposal. Cite the ids you used in consulted_decisions and say how they changed it in lesson_applied. They do not permit any action.",
     decisions: rows.map((r) => ({
@@ -538,6 +628,13 @@ export function pastDecisions(incidentId: number) {
       evidence_when_declined: r.evidence_snapshot ? JSON.parse(r.evidence_snapshot) : null,
       what_actually_fixed_it: r.resolution, decided_at: r.decided_at,
     })),
+    runbooks: runbooks.map((rb) => ({
+      id: rb.runbook_id,
+      version: rb.version,
+      status: rb.lifecycle,
+      spec: JSON.parse(rb.spec),
+    })),
+    incidents_markdown: renderIncidentsMarkdown(inc.service, inc.environment),
   };
 }
 

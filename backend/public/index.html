@@ -172,7 +172,8 @@
         const row = document.createElement("p"); row.className = "call-log";
         const snap = decision.evidence_snapshot ? parse(decision.evidence_snapshot) : null;
         const seen = snap ? Object.entries(snap.probes || {}).map(([dep, p]) => `${dep} probe ${p.healthy ? "healthy" : "unhealthy"} ${p.latencyMs}ms`).join(", ") : "";
-        row.textContent = `Declined ${decision.action}.${seen ? ` Evidence then: ${seen}.` : ""}${decision.reason ? ` Reason: ${decision.reason}.` : ""} ${decision.resolution ? `What fixed it: ${decision.resolution}` : "Not yet resolved."}`;
+        const verb = decision.decision === "declined" ? "Declined" : "Approved";
+        row.textContent = `${verb} ${decision.action}.${seen ? ` Evidence then: ${seen}.` : ""}${decision.reason ? ` Reason: ${decision.reason}.` : ""} ${decision.resolution ? `What fixed it: ${decision.resolution}` : "Not yet resolved."}`;
         lessons.append(row);
       });
       root.append(lessons);
