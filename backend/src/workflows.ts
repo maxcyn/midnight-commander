@@ -1,5 +1,6 @@
 import { db } from "./db.js";
 import { addTimeline, escalate, getIncident, transition } from "./incidents.js";
+import { DEPENDENCY_MAP, manifest } from "./manifest.js";
 import { reportBackendError } from "./monitoring.js";
 import { getEvidence } from "./sentry.js";
 
@@ -34,15 +35,20 @@ async function demoGet(path: string) {
 
 // A payment probe that passes but is far slower than its normal tens of milliseconds means the payment path is
 // degraded. Recommendation timeouts alongside it can be a side effect of a shared connection pool.
-const SLOW_PAYMENT_PROBE_MS = 1000;
+const SLOW_PAYMENT_PROBE_MS = DEPENDENCY_MAP.payments?.degraded_latency_ms ?? 1000;
 const paymentSlow = (probe: Record<string, unknown>) => typeof probe.latencyMs === "number" && probe.latencyMs > SLOW_PAYMENT_PROBE_MS;
 
-// What each allowed action does on the demo app, and how its result is confirmed. Both are explicit target
-// states, never toggles, so a retry cannot reverse them.
-const ACTIONS: Record<string, { path: string; body: Record<string, unknown>; confirmed: (r: Record<string, unknown>) => boolean }> = {
-  disable_recommendations: { path: "/actions/disable-recommendations", body: { expectedPreviousValue: true }, confirmed: (r) => r.currentValue === false },
-  switch_payment_provider: { path: "/actions/switch-payment-provider", body: { expectedPreviousValue: "primary" }, confirmed: (r) => r.currentValue === "backup" },
-};
+// What each allowed action does on the demo app, and how its result is confirmed. Loaded from service-manifest.json.
+const ACTIONS: Record<string, { path: string; body: Record<string, unknown>; confirmed: (r: Record<string, unknown>) => boolean }> = Object.fromEntries(
+  manifest.allowed_actions.map((a) => [
+    a.action,
+    {
+      path: a.endpoint.path,
+      body: a.endpoint.body,
+      confirmed: (r: Record<string, unknown>) => r[a.confirm_field] === a.confirm_equals,
+    },
+  ]),
+);
 
 async function checkApplicability(environment: string, actionName = "disable_recommendations") {
   const [config, recommendationProbe, paymentProbe] = await Promise.all([
@@ -511,18 +517,9 @@ function finishRecovery(executionId: number, incidentId: number, result: Record<
   db.prepare(`UPDATE decision_feedback SET resolution = ? WHERE incident_id = ? AND resolution IS NULL`).run(how, incidentId);
 }
 
-const RETROSPECTIVES: Record<string, { summary: string; unresolved: string; followUp: string }> = {
-  disable_recommendations: {
-    summary: "Checkout recovered; recommendations remain disabled.",
-    unresolved: "Make checkout tolerate recommendation outages; the recommendation dependency itself was not repaired.",
-    followUp: "Make checkout tolerate recommendation outages.",
-  },
-  switch_payment_provider: {
-    summary: "Checkout recovered; payments are running on the backup provider.",
-    unresolved: "The primary payment provider is still degraded and was not repaired; decide when to switch back, and stop recommendation lookups sharing the payment connection pool.",
-    followUp: "Isolate the recommendation client's connection pool from the payment provider.",
-  },
-};
+const RETROSPECTIVES: Record<string, { summary: string; unresolved: string; followUp: string }> = Object.fromEntries(
+  manifest.allowed_actions.map((a) => [a.action, a.retrospective]),
+);
 
 // Earlier engineer decisions on this service and environment, for the investigator. They inform a proposal and
 // never grant permission; the executor still checks fresh evidence before anything runs.

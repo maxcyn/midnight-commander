@@ -1,0 +1,67 @@
+{
+  "service": "checkout",
+  "environment": "demo",
+  "description": "Checkout service with basket validation, optional product recommendations, and payment processing.",
+  "request_path": ["validation", "recommendations", "payment", "confirmation"],
+  "dependencies": [
+    {
+      "name": "recommendations",
+      "probe_path": "/probe/recommendations",
+      "normal_latency_ms": 40,
+      "timeout_ms": 800,
+      "notes": "Optional product suggestions lookup. Shares a connection pool with the primary payment provider."
+    },
+    {
+      "name": "payments",
+      "probe_path": "/probe/payments",
+      "normal_latency_ms": 60,
+      "degraded_latency_ms": 1000,
+      "notes": "Read-only probe checks authorisation latency. Latency above 1000ms indicates primary payment provider degradation saturating the shared pool."
+    }
+  ],
+  "causes": [
+    "recommendations_timeout",
+    "payment_failure",
+    "payment_provider_degradation",
+    "other",
+    "unknown"
+  ],
+  "allowed_actions": [
+    {
+      "action": "disable_recommendations",
+      "addresses": "recommendations_timeout",
+      "parameters": { "flag": "recommendations", "value": false },
+      "endpoint": {
+        "method": "POST",
+        "path": "/actions/disable-recommendations",
+        "body": { "expectedPreviousValue": true }
+      },
+      "confirm_field": "currentValue",
+      "confirm_equals": false,
+      "tradeoff": "Purchases continue without product suggestions.",
+      "retrospective": {
+        "summary": "Checkout recovered; recommendations remain disabled.",
+        "unresolved": "Make checkout tolerate recommendation outages; the recommendation dependency itself was not repaired.",
+        "followUp": "Make checkout tolerate recommendation outages."
+      }
+    },
+    {
+      "action": "switch_payment_provider",
+      "addresses": "payment_provider_degradation",
+      "parameters": { "provider": "backup" },
+      "endpoint": {
+        "method": "POST",
+        "path": "/actions/switch-payment-provider",
+        "body": { "expectedPreviousValue": "primary" }
+      },
+      "confirm_field": "currentValue",
+      "confirm_equals": "backup",
+      "tradeoff": "Payments route through backup provider while primary provider remains degraded.",
+      "retrospective": {
+        "summary": "Checkout recovered; payments are running on the backup provider.",
+        "unresolved": "The primary payment provider is still degraded and was not repaired; decide when to switch back, and stop recommendation lookups sharing the payment connection pool.",
+        "followUp": "Isolate the recommendation client's connection pool from the payment provider."
+      }
+    }
+  ]
+}

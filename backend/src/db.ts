@@ -1,4 +1,5 @@
 import { DatabaseSync } from "node:sqlite";
+import { manifest } from "./manifest.js";
 
 // DB_PATH=:memory: is used by the tests; the default file survives restarts.
 export const db = new DatabaseSync(process.env.DB_PATH ?? "secondshift.db");
@@ -201,8 +202,8 @@ if (!feedbackColumns.some((column) => column.name === "evidence_snapshot")) {
 db.prepare(
   `INSERT OR IGNORE INTO services (name, dependencies, primary_responder, backup_responder) VALUES (?, ?, ?, ?)`,
 ).run(
-  "checkout",
-  JSON.stringify(["recommendations", "payments"]),
+  manifest.service,
+  JSON.stringify(manifest.dependencies.map((d) => d.name)),
   process.env.PRIMARY_RESPONDER ?? "primary-engineer",
   process.env.BACKUP_RESPONDER ?? "backup-engineer",
 );

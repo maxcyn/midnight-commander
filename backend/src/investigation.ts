@@ -1,6 +1,7 @@
 import { db } from "./db.js";
 import { startRun } from "./creao.js";
 import { addEvidence, addTimeline, getIncident, transition } from "./incidents.js";
+import { ALLOWED_ACTIONS_MAP, manifest } from "./manifest.js";
 import { reportBackendError } from "./monitoring.js";
 import { initiateCall, notifyResponder } from "./voice.js";
 
@@ -8,14 +9,11 @@ const now = () => new Date().toISOString();
 const BUDGET_MS = Number(process.env.INVESTIGATION_BUDGET_MS ?? 180_000);
 const PROPOSAL_TTL_MS = 10 * 60_000;
 
-// ---- What the agent may propose ------------------------------------------
+// ---- What the agent may propose (loaded from service-manifest.json) ------
 // The backend, not the model, owns this list. Each action names the cause it can address.
-const ALLOWED_ACTIONS: Record<string, { addresses: string; parameters: Record<string, unknown> }> = {
-  disable_recommendations: { addresses: "recommendations_timeout", parameters: { flag: "recommendations", value: false } },
-  switch_payment_provider: { addresses: "payment_provider_degradation", parameters: { provider: "backup" } },
-};
+const ALLOWED_ACTIONS = ALLOWED_ACTIONS_MAP;
 
-const CAUSES = ["recommendations_timeout", "payment_failure", "payment_provider_degradation", "other", "unknown"];
+const CAUSES = manifest.causes;
 const STATUSES = ["supported", "inconclusive", "contradicted"];
 const RECOMMENDATIONS = ["request_engineer_decision", "permit_runbook", "escalate_without_action"] as const;
 type Recommendation = (typeof RECOMMENDATIONS)[number];

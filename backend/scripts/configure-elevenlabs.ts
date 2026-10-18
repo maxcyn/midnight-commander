@@ -3,6 +3,8 @@
 // Run whenever PUBLIC_URL or TOOL_TOKEN changes:
 //   npx tsx --env-file=.env scripts/configure-elevenlabs.ts
 
+import { manifest } from "../src/manifest.js";
+
 function env(name: string): string {
   const v = process.env[name];
   if (!v) throw new Error(`${name} is not set in .env`);
@@ -13,6 +15,7 @@ const apiKey = env("ELEVENLABS_API_KEY");
 const agentId = env("ELEVENLABS_AGENT_ID");
 const publicUrl = env("PUBLIC_URL").replace(/\/+$/, "");
 const toolToken = env("TOOL_TOKEN");
+const allowedActionNames = manifest.allowed_actions.map((a) => a.action);
 
 const headers = { Authorization: `Bearer ${toolToken}` };
 const incidentPathParam = {
@@ -53,8 +56,8 @@ const tools = [
         properties: {
           action: {
             type: "string",
-            description: "The exact action being approved, the same as the pending proposal: 'disable_recommendations' or 'switch_payment_provider'",
-            enum: ["disable_recommendations", "switch_payment_provider"],
+            description: `The exact action being approved, the same as the pending proposal: ${allowedActionNames.map((a) => `'${a}'`).join(" or ")}`,
+            enum: allowedActionNames,
           },
           responder: {
             type: "string",
@@ -86,7 +89,7 @@ const tools = [
           action: {
             type: "string",
             description: "The pending action being declined, the same as the pending proposal.",
-            enum: ["disable_recommendations", "switch_payment_provider"],
+            enum: allowedActionNames,
           },
           responder: {
             type: "string",

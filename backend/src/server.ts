@@ -8,6 +8,7 @@ import { getEvidence } from "./sentry.js";
 import { startInvestigation, submitInvestigation, validateResult, onRunFinished } from "./investigation.js";
 import { reportBackendError } from "./monitoring.js";
 import { acknowledge, addEvidence, getIncident, incidentDetail, listIncidents, parseSentryAlert, processAlert, takeOver } from "./incidents.js";
+import { DEPENDENCY_MAP, manifest } from "./manifest.js";
 import { approveAndExecute, authoriseRunbook, declineAction, executeAuthorisedRunbook, pastDecisions, recordManualResolution, suspendRunbook, verifyAuthorisedRunbookApplicability } from "./workflows.js";
 import { approveProposedAction, getCall, getLatestCallForIncident, getVoiceBriefing, initiateCall, notifyResponder, recordCallOutcome, type CallOutcome, voiceDeclineAction } from "./voice.js";
 
@@ -148,6 +149,14 @@ app.get("/tools/ping", requireToken, (req, res) => {
   res.json({ ok: true, message: "pong from SecondShift backend", time: new Date().toISOString() });
 });
 
+app.get("/tools/service_manifest", requireToken, (_req, res) => {
+  res.json(manifest);
+});
+
+app.get("/dashboard-api/manifest", dashboardAuth, (_req, res) => {
+  res.json(manifest);
+});
+
 app.post("/tools/submit_investigation", requireToken, async (req, res) => {
   console.log(`[submit_investigation] incident_id=${req.body?.incident_id ?? "missing"}`);
   try {
@@ -205,12 +214,13 @@ app.get("/tools/feature_config", requireToken, async (req, res) => {
 
 app.get("/tools/probe", requireToken, async (req, res) => {
   const dep = String(req.query.dependency ?? "");
-  if (!["recommendations", "payments"].includes(dep)) return res.status(400).json({ error: "dependency must be recommendations or payments" });
+  const depSpec = DEPENDENCY_MAP[dep];
+  if (!depSpec) return res.status(400).json({ error: `dependency must be one of ${Object.keys(DEPENDENCY_MAP).join(", ")}` });
   const incidentId = Number(req.query.incident_id);
   if (!Number.isInteger(incidentId) || !getIncident(incidentId)) return res.status(400).json({ error: "valid incident_id is required" });
   if (!process.env.DEMO_PROBE_TOKEN) return res.status(503).json({ error: "DEMO_PROBE_TOKEN is not configured" });
   try {
-    const r = await demoGet(`/probe/${dep}`);
+    const r = await demoGet(depSpec.probe_path);
     const body = await r.json();
     if (!r.ok) return res.status(r.status).json(body);
     const evidence = body as Record<string, unknown>;

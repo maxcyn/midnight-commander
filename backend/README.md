@@ -56,6 +56,27 @@ Connect your Photon number to an ElevenLabs voice agent via SIP trunking (`https
 
 Run `npm run configure:voice` (`scripts/configure-elevenlabs.ts`) to automatically configure the ElevenLabs agent prompt, dynamic variables, noise/turn settings, and Server Tools pointing to `PUBLIC_URL`. `VOICE_AUTO_CALL` / `PHONE_AUTO_NOTIFY` default to `false` so setup cannot trigger unintentional calls; trigger a live call explicitly via `POST /incidents/:id/call` (`{"live":true}`) or the dashboard's **Call primary** button.
 
+## Plug-and-Play Onboarding for Any Software Project
+
+SecondShift is manifest-driven: the target application's dependencies, read-only probes, supported causes, and allowlisted idempotent actions are declared in [`service-manifest.json`](./service-manifest.json) (loaded by [`src/manifest.ts`](./src/manifest.ts), overrideable via `SERVICE_MANIFEST_PATH`).
+
+To adopt SecondShift for another service in 4 steps:
+
+1. **Define `service-manifest.json`:**
+   Declare your service name, request path, read-only probe endpoints (`/probe/<dependency>`), failure causes, and allowlisted idempotent mitigation endpoints (`/actions/<action>`).
+2. **Clone the CREAO Investigator Agent & Attach the Manifest:**
+   Install the SecondShift CREAO agent from its shared install link (or paste [`agent-prompt.md`](./agent-prompt.md)), upload your `service-manifest.json` to the agent's **Files** tab in CREAO (it is also served at `GET /tools/service_manifest`), and set `BACKEND_URL` + `BACKEND_TOKEN` in CREAO Secrets.
+3. **Add Your API Keys in `backend/.env`:**
+   - **Sentry:** `SENTRY_ORG`, `SENTRY_PROJECT`, `SENTRY_AUTH_TOKEN`, `SENTRY_WEBHOOK_SECRET`
+   - **CREAO:** `CREAO_API_KEY`, `CREAO_APP_ID`
+   - **Photon + ElevenLabs:** `ELEVENLABS_API_KEY`, `ELEVENLABS_AGENT_ID`, `ELEVENLABS_PHONE_NUMBER_ID`, `PRIMARY_PHONE`, `BACKUP_PHONE`
+   - **Target App:** `DEMO_APP_URL`, `DEMO_PROBE_TOKEN`, `DEMO_ACTION_TOKEN`
+4. **Provision the ElevenLabs Voice Agent in One Command:**
+   ```bash
+   npm run configure:voice
+   ```
+   This reads `service-manifest.json` and automatically configures your ElevenLabs agent's prompt, dynamic variables, noise/interruption settings, and webhook tools (`explain_evidence`, `approve_action`, `decline_action`) with your manifest's allowlisted actions.
+
 ## Demo sequence
 
 1. Confirm a healthy checkout at `http://localhost:4000/`.

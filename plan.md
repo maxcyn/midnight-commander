@@ -1,12 +1,13 @@
 Stage 0 — Confirm scope and unblock integrations
-Product: SecondShift, an incident-response agent for one small application.
-MVP: one checkout service, two failure causes, one mitigation, one primary engineer, one backup contact, and one conversational phone integration.
+Product: SecondShift, a plug-and-play incident-response agent and workflow-learning platform powered by CREAO, Sentry, and Photon + ElevenLabs.
+MVP: one checkout service defined via a declarative `service-manifest.json`, two failure causes (including a masked shared-pool degradation), two bounded mitigations, one primary engineer, one backup contact, and one conversational phone integration—packaged so any software project can clone the CREAO agent template, attach its own `service-manifest.json`, and plug in its `.env` keys.
 Component	Responsibility
-Demo application	Produces controlled failures and accepts a feature-flag mitigation
+Service manifest (`service-manifest.json`)	Declares the target application's dependencies, read-only probes, supported causes, and allowlisted idempotent actions (mounted in CREAO's Files tab and enforced by the backend)
+Demo application	Produces controlled failures and accepts explicit feature-flag and provider-switch mitigations
 Sentry	Error detection, Logs, and Tracing
-CREAO	Investigation, runbook selection, and candidate runbook generation
-Backend	Incident state, permissions, action execution, evaluation, and verification
-Photon + ElevenLabs	Telephone connection and spoken interaction
+CREAO	Plug-and-play investigation agent (reads `service-manifest.json` + backend tools), runbook selection, and decline-feedback learning
+Backend	Manifest-driven incident state, permissions, action execution, evaluation, and verification
+Photon + ElevenLabs	Telephone connection and spoken interaction (auto-provisioned via `npm run configure:voice`)
 Database + dashboard	Shared incident history, evidence, decisions, and evaluation results
 
 
@@ -75,11 +76,13 @@ Use incident states such as:
 open → investigating → awaiting_decision → mitigating → verifying → recovered
 Track acknowledgement, escalation, and ownership separately. “Escalated” does not mean the service has recovered.
 Done when: repeated alerts produce one active incident and one coherent timeline, with a named responder.
-Stage 4 — Implement evidence-based CREAO investigation
+Stage 4 — Implement evidence-based CREAO investigation (Plug-and-Play Manifest)
+Define the target service's architecture declaratively in `service-manifest.json` (also attached in CREAO's **Files** tab and served at `GET /tools/service_manifest`) so the CREAO agent template is reusable across any software project without rewriting backend policy code.
 Give CREAO narrowly defined tools:
+- Retrieve the service manifest (`/tools/service_manifest` or attached `service-manifest.json` in CREAO Files).
 - Retrieve Sentry evidence.
 - Read legitimate feature configuration and recent changes.
-- Run read-only dependency probes.
+- Run read-only dependency probes declared in the manifest.
 - Retrieve candidate runbooks.
 - Retrieve past engineer decisions, including declined actions with their reasons, for the same service and similar evidence.
 - Submit a structured investigation result.
@@ -199,6 +202,6 @@ Measure:
 - Alert-to-verified-recovery time for incident 2.
 - Unnecessary actions (expected: none, since the declined action never ran).
 Label all results as controlled demo measurements.
-Scope priority: finish the real failure → Sentry → CREAO → phone approval → verified recovery path first. Then the decline-feedback loop and the second action, since the demo depends on them. Runbook generation and evaluation are optional for this demo. Add dashboard polish last.
+Scope priority: finish the real failure → Sentry → CREAO → phone approval → verified recovery path first. Then the decline-feedback loop and the second action, since the demo depends on them. Package the service definition in `service-manifest.json` so the CREAO agent and ElevenLabs voice setup (`npm run configure:voice`) are plug-and-play for any application. Runbook generation and evaluation are optional for this demo. Add dashboard polish last.
 Defer full scheduling, multi-party conference calls, automatic code deployment, broad infrastructure actions, and multi-channel support.
-Final positioning: SecondShift combines familiar incident-management essentials with a focused experiment: can a human intervention, including a refusal, become a tested, narrowly authorised automation, while unresolved cases reach the engineer through an actionable phone conversation? That is the claim your implementation and demo should prove.
+Final positioning: SecondShift combines familiar incident-management essentials with a focused, plug-and-play experiment: can any engineering team clone a CREAO investigator template, drop in a `service-manifest.json` of read-only probes and bounded mitigations, and turn human interventions—including refusals—into tested, verified incident response over a live phone call? That is the claim your implementation and demo should prove.

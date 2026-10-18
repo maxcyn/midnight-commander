@@ -1,5 +1,6 @@
 // Stage 4 policy checks: the backend, not the model's confidence, decides what is permitted.
 import { decide, validateResult, type InvestigationResult } from "./investigation.js";
+import { ALLOWED_ACTIONS_MAP, DEPENDENCY_MAP, manifest } from "./manifest.js";
 import { evaluateRunbookApplicability } from "./workflows.js";
 
 let failures = 0;
@@ -100,6 +101,13 @@ check("runbook refuses simultaneous dependency failures", !evaluateRunbookApplic
 check("runbook refuses stale evidence", !evaluateRunbookApplicability({ ...recommendationCase, evidenceFresh: false }));
 check("runbook refuses when recommendation flag is already disabled", !evaluateRunbookApplicability({ ...recommendationCase, recommendationsEnabled: false }));
 check("runbook refuses an out-of-scope environment", !evaluateRunbookApplicability({ ...recommendationCase, environment: "production" }));
+
+check("service-manifest.json defines service, dependencies, causes, and allowed_actions",
+  manifest.service === "checkout" &&
+  "recommendations" in DEPENDENCY_MAP &&
+  "payments" in DEPENDENCY_MAP &&
+  ALLOWED_ACTIONS_MAP.disable_recommendations?.addresses === "recommendations_timeout" &&
+  ALLOWED_ACTIONS_MAP.switch_payment_provider?.addresses === "payment_provider_degradation");
 
 console.log(failures === 0 ? "\nAll Stage 4 policy checks passed" : `\n${failures} check(s) failed`);
 process.exit(failures === 0 ? 0 : 1);
