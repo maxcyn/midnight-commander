@@ -6,17 +6,17 @@ Demo application	Produces controlled failures and accepts a feature-flag mitigat
 Sentry	Error detection, Logs, and Tracing
 CREAO	Investigation, runbook selection, and candidate runbook generation
 Backend	Incident state, permissions, action execution, evaluation, and verification
-Photon + Retell	Telephone connection and spoken interaction
+Photon + ElevenLabs	Telephone connection and spoken interaction
 Database + dashboard	Shared incident history, evidence, decisions, and evaluation results
 
 
 Before substantial development, run three integration checks:
 1. Sentry: ingest an error, a structured log, and a trace; retrieve evidence programmatically.
 2. CREAO: trigger a saved agent and make it call a harmless backend tool.
-3. Photon: make a real test call through Retell.
+3. Photon: make a real test call through ElevenLabs.
 CREAO documents reusable agents and connected-tool execution, but confirm the exact API Trigger interface and custom-tool setup in your hackathon account. Don’t build around an assumed endpoint. CREAO
-Photon’s documented Retell setup requires an eligible voice-capable number; shared iMessage lines do not support Voice. Confirm the receiving country is supported before choosing your demo phone. photon.codes
-Done when: each integration works independently, or its specific blocker is identified. The Photon challenge’s exact rules remain unverified until you provide the inaccessible Notion contents.
+Photon’s documented ElevenLabs SIP setup (https://photon.codes/docs/beta/cookbooks/voice/elevenlabs) requires an eligible voice-capable number; shared iMessage lines do not support Voice. Confirm the receiving country is supported before choosing your demo phone. photon.codes
+Done when: each integration works independently, or its specific blocker is identified.
 Stage 1 — Build a reproducibly breakable application
 Use a small Node.js/TypeScript service with simulated payments. The frontend only needs a basket, checkout button, and order result.
 Checkout performs:
@@ -98,7 +98,7 @@ Investigation exceeds its time budget	Contact the engineer with what is known
 For urgent incidents, notification must not wait indefinitely for diagnosis. The call can say that investigation is ongoing.
 Done when: CREAO distinguishes recommendation failure from payment failure without seeing the injected scenario label.
 Stage 5 — Add the Photon phone interaction
-Use Photon 2.0 + Retell, following the documented SIP integration. Retell handles the spoken conversation; Photon connects it to the phone network. photon.codes
+Use Photon 2.0 + ElevenLabs, following the documented SIP integration. ElevenLabs handles the spoken conversation; Photon connects it to the phone network. photon.codes
 Prepare a short briefing before calling:
 “SecondShift here about incident 104. Checkout requests are failing. Recommendation timeouts are the leading cause. I propose disabling recommendations; purchases could continue without product suggestions. Would you like the evidence, approve this action, or take over?”
 

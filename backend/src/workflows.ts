@@ -480,10 +480,16 @@ export function startPhoneCall(incidentId: number, responder: string, phoneNumbe
   const incident = getIncident(incidentId);
   if (!incident) throw new Error(`incident ${incidentId} not found`);
   if (incident.autonomy === "halted") throw new Error("phone notification is halted after responder takeover");
+  const elevenKey = process.env.ELEVENLABS_API_KEY;
+  const elevenAgentId = process.env.ELEVENLABS_AGENT_ID;
+  const elevenPhoneId = process.env.ELEVENLABS_PHONE_NUMBER_ID;
+  const useElevenLabs = Boolean(elevenKey && elevenAgentId && elevenPhoneId);
   const callToken = process.env.RETELL_API_KEY;
   const fromNumber = process.env.RETELL_FROM_NUMBER;
   const agentId = process.env.RETELL_AGENT_ID;
-  if (!callToken || !fromNumber || !agentId) throw new Error("RETELL_API_KEY, RETELL_FROM_NUMBER and RETELL_AGENT_ID must be configured");
+  if (!useElevenLabs && (!callToken || !fromNumber || !agentId)) {
+    throw new Error("Configure ELEVENLABS_API_KEY, ELEVENLABS_AGENT_ID, ELEVENLABS_PHONE_NUMBER_ID (or RETELL_API_KEY, RETELL_FROM_NUMBER, RETELL_AGENT_ID)");
+  }
   if (!/^\+[1-9]\d{7,14}$/.test(phoneNumber)) throw new Error("responder phone number must use E.164 format");
   const existing = db.prepare(`SELECT id, retell_call_id, status FROM phone_calls WHERE incident_id = ? AND phone_number = ?`)
     .get(incidentId, phoneNumber) as { id: number; retell_call_id: string | null; status: string } | undefined;
@@ -505,6 +511,41 @@ export function startPhoneCall(incidentId: number, responder: string, phoneNumbe
 
   void (async () => {
     try {
+      if (useElevenLabs) {
+        const pendingAction = db
+          .prepare(`SELECT id, action FROM proposed_actions WHERE incident_id = ? AND approval_state = 'pending' ORDER BY id DESC LIMIT 1`)
+          .get(incidentId) as { id: number; action: string } | undefined;
+        const response = await fetch("https://api.elevenlabs.io/v1/convai/sip-trunk/outbound-call", {
+          method: "POST",
+          headers: { "xi-api-key": elevenKey!, "Content-Type": "application/json" },
+          body: JSON.stringify({
+            agent_id: elevenAgentId,
+            agent_phone_number_id: elevenPhoneId,
+            to_number: phoneNumber,
+            conversation_initiation_client_data: {
+              dynamic_variables: {
+                incident_id: String(incidentId),
+                call_id: String(id),
+                responder,
+                proposed_action: pendingAction?.action ?? "none",
+                call_briefing: message,
+              },
+              conversation_config_override: {
+                agent: { first_message: message },
+              },
+            },
+          }),
+          signal: AbortSignal.timeout(15_000),
+        });
+        const result = await response.json().catch(() => ({})) as Record<string, unknown>;
+        if (!response.ok || result.success === false || typeof result.conversation_id !== "string") {
+          throw new Error(`ElevenLabs call request failed (${response.status}): ${JSON.stringify(result).slice(0, 400)}`);
+        }
+        db.prepare(`UPDATE phone_calls SET retell_call_id = ?, updated_at = ? WHERE id = ?`)
+          .run(result.conversation_id, now(), id);
+        addTimeline(incidentId, "elevenlabs", "phone_call_connected_to_provider", { callRecordId: id, callId: result.conversation_id });
+        return;
+      }
       const response = await fetch("https://api.retellai.com/v2/create-phone-call", {
         method: "POST",
         headers: { Authorization: `Bearer ${callToken}`, "Content-Type": "application/json" },
@@ -533,9 +574,9 @@ export function startPhoneCall(incidentId: number, responder: string, phoneNumbe
       const message = error instanceof Error ? error.message : String(error);
       db.prepare(`UPDATE phone_calls SET status = 'failed', outcome = ?, updated_at = ? WHERE id = ?`)
         .run(message, now(), id);
-      addTimeline(incidentId, "retell", "phone_call_failed", { callRecordId: id, error: message }, "error");
+      addTimeline(incidentId, useElevenLabs ? "elevenlabs" : "retell", "phone_call_failed", { callRecordId: id, error: message }, "error");
       console.error(`[phone] incident ${incidentId} call failed: ${message}`);
-      void reportBackendError(error, { operation: "retell_call_start", incidentId });
+      void reportBackendError(error, { operation: "phone_call_start", incidentId });
       if (responder === (process.env.PRIMARY_RESPONDER ?? "primary-engineer")) {
         try {
           escalate(incidentId, "primary phone call could not be initiated");

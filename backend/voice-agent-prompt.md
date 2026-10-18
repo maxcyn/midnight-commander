@@ -1,4 +1,20 @@
-# Retell responder agent setup
+# ElevenLabs + Photon responder agent setup
+
+Run `npm run configure:voice` (`scripts/configure-elevenlabs.ts`) to automatically configure the ElevenLabs voice agent via the ElevenLabs REST API (`PATCH /v1/convai/agents/:id`) with the SecondShift prompt, dynamic variables (`incident_id`, `call_id`, `responder`, `proposed_action`, `call_briefing`), noise/interruption settings, and webhook tools pointing to `PUBLIC_URL`.
+
+## ElevenLabs Server Tools (configured automatically by `npm run configure:voice`)
+
+| Tool | Method & URL | Purpose |
+|---|---|---|
+| `explain_evidence` | `GET /voice/incidents/{incident_id}/briefing` | Retrieve incident briefing, impact, hypotheses, and evidence |
+| `check_dependency` | `POST /voice/incidents/{incident_id}/probe` | Run live read-only probe on `payments` or `recommendations` |
+| `approve_action` | `POST /voice/incidents/{incident_id}/approve` | Confirm and execute `disable_recommendations` and start Stage 6 verification |
+| `take_over` | `POST /voice/incidents/{incident_id}/take-over` | Transfer ownership to responder and halt autonomous actions |
+| `check_status` | `GET /voice/incidents/{incident_id}/status` | Retrieve current incident and recovery verification status |
+
+---
+
+# Legacy Retell responder agent setup
 
 Configure a Retell voice agent with the following prompt and custom functions. Keep the CREAO investigator and Retell voice agent separate: CREAO investigates; this agent reads and relays the shared incident record and waits for the responder's decision.
 

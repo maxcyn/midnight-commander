@@ -50,11 +50,11 @@ Create a CREAO agent using [agent-prompt.md](./agent-prompt.md), with an `incide
 
 The adapter currently calls CREAO's `/api/v1/runs` interface. Confirm the Trigger API, tool credentials, and callback payload shape in the hackathon account before relying on it. A harmless tool-call check is `GET /tools/ping`; do not promote the agent's recommendation directly into an action.
 
-### Retell and Photon
+### ElevenLabs and Photon (SIP Trunk)
 
-Configure the Retell responder agent and custom functions using [voice-agent-prompt.md](./voice-agent-prompt.md). Set `RETELL_API_KEY`, `RETELL_AGENT_ID`, `RETELL_FROM_NUMBER`, and enrolled `PRIMARY_PHONE`/`BACKUP_PHONE` values in E.164 form. Register `https://<PUBLIC_URL>/retell-webhook` in Retell and use a key that can verify webhook signatures. `PHONE_AUTO_NOTIFY` defaults to false so setup cannot trigger unintentional calls; enable it only after testing with enrolled participants.
+Connect your Photon number to an ElevenLabs voice agent via SIP trunking (`https://photon.codes/docs/beta/cookbooks/voice/elevenlabs`). Set `ELEVENLABS_API_KEY`, `ELEVENLABS_AGENT_ID`, `ELEVENLABS_PHONE_NUMBER_ID`, and enrolled `PRIMARY_PHONE`/`BACKUP_PHONE` values in E.164 form in `backend/.env`.
 
-Photon must provide a supported voice-capable number/country and the account-side SIP connection to Retell. Shared iMessage-only lines cannot receive the planned voice call. A live call and the exact Photon challenge requirements remain account-side checks; source configuration alone does not claim those checks passed.
+Run `npm run configure:voice` (`scripts/configure-elevenlabs.ts`) to automatically configure the ElevenLabs agent prompt, dynamic variables, noise/turn settings, and Server Tools pointing to `PUBLIC_URL`. `VOICE_AUTO_CALL` / `PHONE_AUTO_NOTIFY` default to `false` so setup cannot trigger unintentional calls; trigger a live call explicitly via `POST /incidents/:id/call` (`{"live":true}`) or the dashboard's **Call primary** button.
 
 ## Demo sequence
 

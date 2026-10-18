@@ -157,6 +157,22 @@ CREATE TABLE IF NOT EXISTS retrospectives (
   unresolved_work TEXT NOT NULL,
   generated_at TEXT NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS calls (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  incident_id INTEGER NOT NULL REFERENCES incidents(id),
+  responder TEXT NOT NULL,
+  phone_number TEXT NOT NULL,
+  attempt INTEGER NOT NULL DEFAULT 1,
+  conversation_id TEXT,
+  sip_call_id TEXT,
+  outcome TEXT NOT NULL DEFAULT 'initiated',  -- initiated | answered | acknowledged | approved | failed | unanswered
+  briefing TEXT NOT NULL,
+  proposed_action_id INTEGER REFERENCES proposed_actions(id),
+  started_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  ended_at TEXT
+);
 `);
 
 const incidentColumns = db.prepare(`PRAGMA table_info(incidents)`).all() as { name: string }[];

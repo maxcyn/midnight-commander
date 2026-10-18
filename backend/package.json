@@ -5,7 +5,8 @@
   "scripts": {
     "dev": "tsx watch --env-file=.env src/server.ts",
     "start": "tsx --env-file=.env src/server.ts",
-    "selftest": "tsx scripts/selftest.ts"
+    "selftest": "tsx scripts/selftest.ts",
+    "configure:voice": "tsx --env-file=.env scripts/configure-elevenlabs.ts"
   },
   "dependencies": {
     "express": "^4.21.0"

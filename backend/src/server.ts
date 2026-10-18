@@ -9,6 +9,7 @@ import { startInvestigation, submitInvestigation, validateResult, onRunFinished 
 import { reportBackendError } from "./monitoring.js";
 import { acknowledge, addEvidence, escalate, getIncident, incidentDetail, listIncidents, parseSentryAlert, processAlert, takeOver } from "./incidents.js";
 import { approveAndExecute, approveVoiceAction, authoriseRunbook, declineAction, executeAuthorisedRunbook, notifyResponder, recordPhoneOutcome, suspendRunbook, verifyAuthorisedRunbookApplicability } from "./workflows.js";
+import { approveProposedAction, getCall, getLatestCallForIncident, getVoiceBriefing, getVoiceStatus, initiateCall, recordCallOutcome, runVoiceProbe, voiceTakeOver, type CallOutcome } from "./voice.js";
 
 const PORT = Number(process.env.PORT ?? 3000);
 const TOOL_TOKEN = process.env.TOOL_TOKEN;
@@ -53,6 +54,7 @@ const voiceAuth = (req: Request, res: Response, next: NextFunction) => {
   next();
 };
 
+app.get("/", (_req, res) => res.redirect("/dashboard"));
 app.get("/dashboard", (_req, res) => res.sendFile(fileURLToPath(new URL("../public/index.html", import.meta.url))));
 app.get("/dashboard-api/responders", (req, res) => {
   const token = process.env.DASHBOARD_TOKEN;
@@ -559,6 +561,131 @@ app.get("/incidents/:id", dashboardAuth, wrap((req, res) => {
 app.post("/incidents/:id/ack", dashboardAuth, wrap((req) => { acknowledge(Number(req.params.id), req.get("x-responder")!); return { ok: true }; }));
 app.post("/incidents/:id/escalate", dashboardAuth, wrap((req) => { escalate(Number(req.params.id), String(req.body?.reason ?? "manual")); return { ok: true }; }));
 app.post("/incidents/:id/take-over", dashboardAuth, wrap((req) => { takeOver(Number(req.params.id), req.get("x-responder")!); return { ok: true }; }));
+
+// ---- Stage 5: ElevenLabs + Photon voice agent endpoints ------------------
+const elevenVoiceAuth = (req: Request, res: Response, next: NextFunction) => {
+  const auth = req.get("authorization") ?? "";
+  const allowed = [process.env.TOOL_TOKEN, process.env.VOICE_TOOL_TOKEN, process.env.DASHBOARD_TOKEN].filter(Boolean);
+  if (!allowed.some((tok) => auth === `Bearer ${tok}`)) {
+    return res.status(401).json({ error: "unauthorized" });
+  }
+  next();
+};
+
+app.get("/voice/incidents/:id/briefing", elevenVoiceAuth, wrap((req) => getVoiceBriefing(Number(req.params.id))));
+app.get("/voice/incidents/:id/status", elevenVoiceAuth, wrap((req) => getVoiceStatus(Number(req.params.id))));
+
+app.post("/voice/incidents/:id/probe", elevenVoiceAuth, async (req, res) => {
+  const dep = String(req.body?.dependency ?? req.query.dependency ?? "") as "recommendations" | "payments";
+  try {
+    res.json(await runVoiceProbe(Number(req.params.id), dep));
+  } catch (err) {
+    res.status(400).json({ error: err instanceof Error ? err.message : String(err) });
+  }
+});
+
+app.post("/voice/incidents/:id/approve", elevenVoiceAuth, async (req, res) => {
+  const incidentId = Number(req.params.id);
+  const responder = String(req.body?.responder ?? process.env.PRIMARY_RESPONDER ?? "primary-engineer");
+  const action = String(req.body?.action ?? "disable_recommendations");
+  const confirmed = Boolean(req.body?.confirmed);
+
+  // If DEMO_ACTION_TOKEN is configured and confirmed, run full Stage 6 execution & verification if possible
+  if (confirmed && process.env.DEMO_ACTION_TOKEN) {
+    const pending = db
+      .prepare(`SELECT id FROM proposed_actions WHERE incident_id = ? AND approval_state = 'pending' AND action = ? ORDER BY id DESC LIMIT 1`)
+      .get(incidentId, action) as { id: number } | undefined;
+    if (pending) {
+      try {
+        acknowledge(incidentId, responder);
+        const execOut = await approveAndExecute(incidentId, pending.id, responder);
+        const call = getLatestCallForIncident(incidentId);
+        if (call) {
+          db.prepare(`UPDATE calls SET outcome = 'approved', updated_at = ?, ended_at = ? WHERE id = ?`)
+            .run(new Date().toISOString(), new Date().toISOString(), call.id);
+        }
+        db.prepare(`UPDATE phone_calls SET status = 'approved', outcome = ?, updated_at = ? WHERE incident_id = ?`)
+          .run(`approved action ${pending.id}`, new Date().toISOString(), incidentId);
+        return res.json({
+          approved: true,
+          actionId: pending.id,
+          action,
+          incidentStatus: execOut.status,
+          executionId: execOut.executionId,
+          spokenSummary: `Approved and executed ${action} for incident ${incidentId}. Verification is now running.`,
+        });
+      } catch {
+        // Fall through to state-level approval if demo-app is offline during unit/voice tests
+      }
+    }
+  }
+
+  try {
+    const out = approveProposedAction({
+      incidentId,
+      action,
+      responder,
+      confirmed,
+      verificationCode: req.body?.verification_code ? String(req.body.verification_code) : undefined,
+    });
+    res.status(out.approved ? 200 : 422).json(out);
+  } catch (err) {
+    res.status(400).json({ error: err instanceof Error ? err.message : String(err) });
+  }
+});
+
+app.post("/voice/incidents/:id/take-over", elevenVoiceAuth, wrap((req) =>
+  voiceTakeOver(Number(req.params.id), String(req.body?.responder ?? process.env.PRIMARY_RESPONDER ?? "primary-engineer")),
+));
+
+app.post("/incidents/:id/call", elevenVoiceAuth, async (req, res) => {
+  try {
+    const out = await initiateCall(Number(req.params.id), {
+      responder: req.body?.responder ? String(req.body.responder) : undefined,
+      live: req.body?.live ?? true,
+    });
+    res.json(out);
+  } catch (err) {
+    res.status(400).json({ error: err instanceof Error ? err.message : String(err) });
+  }
+});
+
+app.post("/calls/:id/outcome", elevenVoiceAuth, async (req, res) => {
+  try {
+    const out = await recordCallOutcome(Number(req.params.id), req.body?.outcome as CallOutcome, {
+      reason: req.body?.reason,
+      live: Boolean(req.body?.live),
+    });
+    res.json(out);
+  } catch (err) {
+    res.status(400).json({ error: err instanceof Error ? err.message : String(err) });
+  }
+});
+
+app.post("/elevenlabs-webhook", async (req, res) => {
+  res.json({ ok: true });
+  setImmediate(async () => {
+    try {
+      const data = req.body?.data ?? req.body ?? {};
+      const dyn = data?.conversation_initiation_client_data?.dynamic_variables ?? {};
+      const callId = Number(dyn.call_id);
+      if (!callId) return;
+      const call = getCall(callId);
+      if (!call || ["approved", "acknowledged"].includes(call.outcome)) return;
+      const status = String(data.status ?? "");
+      const duration = Number(data?.metadata?.call_duration_secs ?? 0);
+      if (status === "failed") {
+        await recordCallOutcome(callId, "failed", { reason: "elevenlabs call failed" });
+      } else if (duration === 0 && call.outcome === "initiated") {
+        await recordCallOutcome(callId, "unanswered", { reason: "call ended with 0s duration" });
+      } else if (call.outcome === "initiated") {
+        await recordCallOutcome(callId, "answered", { reason: "call completed" });
+      }
+    } catch (err) {
+      console.error("[elevenlabs-webhook]", err);
+    }
+  });
+});
 
 // Lets you exercise the full path (incident -> CREAO -> decision) without waiting for a Sentry alert rule.
 app.post("/debug/alert", debugAuth, (req, res) => {

@@ -2,6 +2,7 @@ import { db } from "./db.js";
 import { startRun } from "./creao.js";
 import { addEvidence, addTimeline, getIncident, transition } from "./incidents.js";
 import { reportBackendError } from "./monitoring.js";
+import { initiateCall } from "./voice.js";
 import { notifyResponder } from "./workflows.js";
 
 const now = () => new Date().toISOString();
@@ -250,5 +251,8 @@ export function submitInvestigation(raw: unknown, backendVerifiedRunbook = false
   // The voice briefing is stored from the agent's own words so the phone call speaks from the incident record.
   addTimeline(incidentId, "system", `decision_${decision.final}`, { reasons: decision.reasons, briefing: r.call_briefing });
   transition(incidentId, "awaiting_decision", "system");
+  if (decision.final !== "permit_runbook") {
+    void initiateCall(incidentId, { live: process.env.VOICE_AUTO_CALL === "true" || process.env.PHONE_AUTO_NOTIFY === "true" });
+  }
   return { accepted: true as const, decision, applied: true, proposedActionId };
 }
