@@ -94,8 +94,9 @@ export async function startInvestigation(incidentId: number) {
   const info = db.prepare(`INSERT INTO investigations (incident_id, started_at) VALUES (?,?)`).run(incidentId, now());
   const invId = Number(info.lastInsertRowid);
   try {
-    // Stable key: a retried trigger returns the same run instead of starting a second investigation.
-    const run = await startRun({ incident_id: String(incidentId) }, `incident-${incidentId}-investigation-1`);
+    // Stable per incident, so a retried trigger returns the same run instead of starting a second one.
+    // The open time keeps keys unique even if the database is reset and ids are reused.
+    const run = await startRun({ incident_id: String(incidentId) }, `incident-${incidentId}-${Date.parse(inc.opened_at)}-investigation-1`);
     db.prepare(`UPDATE investigations SET run_id = ? WHERE id = ?`).run(run.id, invId);
     addTimeline(incidentId, "system", "investigation_started", { runId: run.id, budgetMs: BUDGET_MS });
   } catch (err) {
