@@ -117,14 +117,37 @@ HOW TO HANDLE SPOKEN REQUESTS
 
 const payload = {
   conversation_config: {
+    asr: {
+      quality: "high",
+      provider: "scribe_realtime",
+      keywords: [
+        "approve",
+        "decline",
+        "explain",
+        "evidence",
+        "recommendations",
+        "payments",
+        "provider",
+        "disable",
+        "switch",
+      ],
+    },
     turn: {
       turn_eagerness: "patient",
+      speculative_turn: false,
+      interruption_ignore_term_languages: ["en"],
+      merge_with_default_ignore_terms: true,
+      interruption_ignore_terms: ["okay", "ok", "yeah", "yes", "uh", "um", "hi", "hey", "what", "hmm"],
     },
     vad: {
       background_voice_detection: true,
     },
+    tts: {
+      expressive_mode: false,
+    },
     agent: {
       first_message: "{{call_briefing}}",
+      disable_first_message_interruptions: true,
       dynamic_variables: {
         dynamic_variable_placeholders: {
           incident_id: "1",
