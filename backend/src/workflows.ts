@@ -507,7 +507,7 @@ function finishRecovery(executionId: number, incidentId: number, result: Record<
   addTimeline(incidentId, "system", "retrospective_generated", { summary: outcome.summary, followUp: outcome.followUp });
   // Close the loop on any declined proposal: record what actually restored service, for later investigations.
   const how = execution.actor.startsWith("manual:")
-    ? `${execution.action} was applied by the engineer (${execution.actor.slice(7)}): ${JSON.parse(execution.result ?? "{}").note ?? "no note"}. Checkout recovered after verification.`
+    ? `${execution.action} was applied by the engineer (${execution.actor.slice(7)}): ${String(JSON.parse(execution.result ?? "{}").note ?? "no note").replace(/[.\s]+$/, "")}. Checkout recovered after verification.`
     : `${execution.action} restored checkout after verification.`;
   db.prepare(`UPDATE decision_feedback SET resolution = ? WHERE incident_id = ? AND resolution IS NULL`).run(how, incidentId);
 }

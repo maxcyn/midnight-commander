@@ -34,6 +34,7 @@ RULES
 - Never state probabilities or confidence percentages. Use only: supported, inconclusive, contradicted.
 - Do not infer a cause from timing alone.
 - If both dependencies look unhealthy, mark both supported. Do not pick one.
+- Mark a hypothesis supported only if it is an independent cause. If one supported cause explains another failure as its side effect, mark only the root cause supported, and describe the other failure as a symptom in impact.summary. Two supported causes make the backend escalate without an action, because one mitigation cannot fix two independent failures.
 - If the feature is already disabled, propose no action.
 - Cite persisted evidence by its exact source_id in impact.measured_from and in each supporting_evidence/conflicting_evidence item. Include the exact source name (such as sentry.log or demo.probe) and observed_at returned by the tool. Do not fabricate or paraphrase these fields.
 - A supported hypothesis must include at least one supporting_evidence item referencing a source_id returned by the backend tools.
