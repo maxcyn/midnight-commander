@@ -1,0 +1,20 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>Shop</title>
+<style>body{font-family:system-ui;max-width:420px;margin:40px auto}li{margin:6px 0}#out{margin-top:16px;padding:12px;border-radius:6px;white-space:pre-wrap}.ok{background:#e6f6ea}.bad{background:#fde8e8}</style></head>
+<body>
+<h2>Basket</h2>
+<ul><li>Tee × 1 — $20</li><li>Mug × 2 — $24</li></ul>
+<p><b>Total: $44</b></p>
+<button id="go">Checkout</button>
+<div id="out"></div>
+<script>
+document.getElementById("go").onclick = async () => {
+  const out = document.getElementById("out");
+  out.textContent = "Processing…"; out.className = "";
+  const res = await fetch("/checkout", {method:"POST",headers:{"content-type":"application/json"},
+    body: JSON.stringify({items:[{sku:"sku-tee",qty:1},{sku:"sku-mug",qty:2}]})});
+  const b = await res.json();
+  out.className = b.ok ? "ok" : "bad";
+  out.textContent = b.ok ? `Order ${b.orderId} confirmed. Total $${b.total}.` : `Checkout failed (${b.stage}): ${b.error}`;
+};
+</script></body></html>

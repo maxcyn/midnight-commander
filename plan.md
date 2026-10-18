@@ -1,0 +1,194 @@
+Stage 0 — Confirm scope and unblock integrations
+Product: SecondShift, an incident-response agent for one small application.
+MVP: one checkout service, two failure causes, one mitigation, one primary engineer, one backup contact, and one conversational phone integration.
+Component	Responsibility
+Demo application	Produces controlled failures and accepts a feature-flag mitigation
+Sentry	Error detection, Logs, and Tracing
+CREAO	Investigation, runbook selection, and candidate runbook generation
+Backend	Incident state, permissions, action execution, evaluation, and verification
+Photon + Retell	Telephone connection and spoken interaction
+Database + dashboard	Shared incident history, evidence, decisions, and evaluation results
+
+
+Before substantial development, run three integration checks:
+1. Sentry: ingest an error, a structured log, and a trace; retrieve evidence programmatically.
+2. CREAO: trigger a saved agent and make it call a harmless backend tool.
+3. Photon: make a real test call through Retell.
+CREAO documents reusable agents and connected-tool execution, but confirm the exact API Trigger interface and custom-tool setup in your hackathon account. Don’t build around an assumed endpoint. CREAO
+Photon’s documented Retell setup requires an eligible voice-capable number; shared iMessage lines do not support Voice. Confirm the receiving country is supported before choosing your demo phone. photon.codes
+Done when: each integration works independently, or its specific blocker is identified. The Photon challenge’s exact rules remain unverified until you provide the inaccessible Notion contents.
+Stage 1 — Build a reproducibly breakable application
+Use a small Node.js/TypeScript service with simulated payments. The frontend only needs a basket, checkout button, and order result.
+Checkout performs:
+1. Basket validation.
+2. Optional recommendation lookup.
+3. Simulated payment.
+4. Order confirmation.
+Add private development controls:
+Control	Effect
+Recommendations enabled	Checkout calls the recommendation dependency
+Recommendation fault	Dependency exceeds its timeout
+Payment fault	Simulated payment fails
+Reset	Returns the test environment to a known state
+
+
+Intentionally let a recommendation timeout break checkout. The available mitigation is disabling recommendations.
+Build one authenticated action endpoint that sets the feature flag to false; avoid a “toggle” operation, which could reverse the action if retried.
+Run synthetic requests continuously, keeping request timestamps, outcomes, and latency.
+Important correction: if recommendations fail before payment is reached, missing payment errors do not prove payments are healthy. Use an independent dependency probe if the agent needs that evidence.
+Keep the responder backend separate from the faulty application. Fault-injection settings are visible to the test runner, not the investigating agent.
+Done when: recommendations can break checkout, disabling them restores checkout, and the same action does not repair a payment failure.
+Stage 2 — Add real Sentry observability
+Instrument actual requests and failures rather than uploading fabricated incident summaries.
+Signal	Implementation	Purpose
+Errors	Capture failed checkout exceptions	Alert trigger
+Traces	Checkout span with recommendation and payment spans	Locate failed or slow execution
+Structured logs	Dependency outcomes, feature changes, mitigation outcomes	Explain context and actions
+Attributes	Service, environment, release, request ID, opaque run ID	Correlate and isolate evidence
+
+
+Use complete trace sampling for this small controlled demo, subject to quota. Explicitly enable structured Logs; ordinary console output should not be assumed to appear in Sentry.
+Build a backend adapter that queries Sentry and returns evidence with timestamps and source identifiers. Sentry documents Explore queries for logs and spans, plus trace retrieval; validate the available fields and permissions in your account. Sentry Docs
+Configure an alert action webhook. Your endpoint should validate the delivery, save it, acknowledge promptly, and queue processing.
+Done when: a real synthetic failure triggers the backend and the agent can retrieve the associated logs and trace.
+Stage 3 — Build the incident record and ownership layer
+Borrow Rootly’s idea of one shared incident record, but keep implementation small.
+Store:
+Record	Essential contents
+Service	Name, dependencies, primary responder, backup responder
+Incident	Service, environment, status, severity, timestamps
+Evidence	Source, observation time, content/reference
+Timeline event	Actor, action, timestamp, result
+Proposed action	Exact target, parameters, expiry, approval state
+Runbook version	Conditions, operation, verification, evaluation results
+
+
+Start with a manually configured owner and backup. A complete rotation calendar is unnecessary.
+Handle two different duplication problems:
+- Webhook retry: process the same delivery once.
+- Repeated symptoms: attach recurring events from the same Sentry issue and environment to an active incident instead of calling repeatedly.
+Do not merge unrelated errors merely because they occur close together. A new recurrence after recovery gets a new incident linked to its predecessor.
+Use incident states such as:
+open → investigating → awaiting_decision → mitigating → verifying → recovered
+Track acknowledgement, escalation, and ownership separately. “Escalated” does not mean the service has recovered.
+Done when: repeated alerts produce one active incident and one coherent timeline, with a named responder.
+Stage 4 — Implement evidence-based CREAO investigation
+Give CREAO narrowly defined tools:
+- Retrieve Sentry evidence.
+- Read legitimate feature configuration and recent changes.
+- Run read-only dependency probes.
+- Retrieve candidate runbooks.
+- Submit a structured investigation result.
+The result should contain:
+- Observed impact and its measurement source.
+- Leading hypothesis.
+- Supporting and conflicting evidence.
+- Missing information.
+- Applicable runbook, if any.
+- Proposed action and expected tradeoff.
+Avoid displaying invented probabilities such as “97% confident.” Use evidence-backed descriptions such as supported, inconclusive, or contradicted.
+The backend—not an LLM confidence score—checks whether an action is permitted.
+Finding	Response
+Relevant failure evidence, but no authorised runbook	Request an engineer’s decision
+Tested, authorised runbook with satisfied conditions	Permit its bounded operation
+Missing or contradictory evidence	Escalate without changing the app
+Investigation exceeds its time budget	Contact the engineer with what is known
+
+
+For urgent incidents, notification must not wait indefinitely for diagnosis. The call can say that investigation is ongoing.
+Done when: CREAO distinguishes recommendation failure from payment failure without seeing the injected scenario label.
+Stage 5 — Add the Photon phone interaction
+Use Photon 2.0 + Retell, following the documented SIP integration. Retell handles the spoken conversation; Photon connects it to the phone network. photon.codes
+Prepare a short briefing before calling:
+“SecondShift here about incident 104. Checkout requests are failing. Recommendation timeouts are the leading cause. I propose disabling recommendations; purchases could continue without product suggestions. Would you like the evidence, approve this action, or take over?”
+
+The voice agent can:
+Spoken request	Backend operation
+“Explain the evidence”	Retrieve the incident briefing
+“Check payments”	Request a read-only investigation
+“Disable recommendations”	Confirm the specific pending action
+“I’ll handle it”	Transfer control and stop new autonomous actions
+“Did it work?”	Retrieve verification status
+
+
+Keep CREAO as the investigator; the voice agent speaks from the same incident record.
+Record call outcomes separately: initiated, answered, acknowledged, approved, failed, or unanswered. Answering a call is not approval. Bind any approval to the exact action, incident, authorised responder, and expiry. For the demo, use an enrolled participant and a simple verification step before accepting an operational approval.
+If unanswered, follow a bounded retry policy and notify the configured backup. Do not repeatedly call for every error event.
+Done when: the engineer can understand, approve or decline, and obtain status without opening Slack.
+Stage 6 — Execute mitigation and verify recovery
+The backend performs the action only after checking:
+- Current incident state.
+- Approval or pre-authorised runbook scope.
+- Fresh applicability evidence.
+- Exact target environment.
+- Whether the operation already executed.
+Record the previous flag value and action result. Allow only one active mutation per incident.
+Verification combines:
+1. Synthetic checkout results.
+2. Correct order-confirmation behaviour.
+3. Fresh Sentry telemetry.
+4. A defined observation window.
+For example, a demo-specific recovery rule could require ten successful synthetic checkouts across at least 30 seconds, plus matching successful post-action traces. This is a demonstration threshold, not a production reliability guarantee.
+If Sentry data is delayed, display “functional checks passed; telemetry confirmation pending.” Silence or absent errors alone is insufficient.
+If mitigation fails, stop and escalate. Do not repeatedly retry the same ineffective action or automatically re-enable a known failing dependency.
+Done when: success is supported by measured results, and failed mitigation never becomes a false “resolved” incident.
+Stage 7 — Learn a runbook and evaluate it
+After a verified human-guided intervention, CREAO proposes a structured procedure derived from:
+- Incident evidence.
+- The engineer’s approved action.
+- Actual execution.
+- Recovery observations.
+- Relevant environment and release context.
+Its output includes preconditions, disqualifying conditions, the allowed action, verification rules, and escalation behaviour.
+Store it as versioned structured data; generate readable Markdown for explanation. This is workflow learning, not RLHF.
+Use a lifecycle:
+draft → evaluated → authorised → suspended
+Passing tests and permission to run automatically are separate decisions. Approval of one incident does not authorise all future executions.
+Evaluate both the applicability decision and the resulting action:
+Test	Required behaviour
+Recommendation timeout	Select procedure; restore checkout
+Matching recurrence with different IDs	Still select correctly
+Payment failure only	Reject procedure
+Both dependencies failing	Do not claim full recovery; escalate unresolved failure
+Missing or stale evidence	Abstain
+Feature already disabled	Recognise no further mitigation from the same action
+Action rejected or ineffective	Record failure and escalate
+
+
+Use isolated test instances and credentials. Evaluation events must not trigger live paging.
+Keep fixed tests and held-out variations that the generating agent cannot rewrite. Otherwise the system could produce a procedure and conveniently weak tests for itself.
+Done when: the dashboard shows a generated runbook, its evidence, and measured pass/fail results—including refusal cases.
+Stage 8 — Add the retrospective and readable dashboard
+Borrow the useful coordination features without building a full Rootly replacement:
+- Incident overview: impact, owner, acknowledgement, current status.
+- Evidence panel: linked logs, traces, competing explanations.
+- Timeline: alerts, investigation, calls, approval, action, verification.
+- Runbook panel: version, scope, authorisation, evaluation results.
+- Retrospective: what happened, what restored service, unresolved work.
+Generate a follow-up item for the permanent fix—for example, making checkout tolerate recommendation outages.
+Label the outcome accurately: “Checkout recovered; recommendations remain disabled.” This is mitigation, not a repaired recommendation service.
+Log your own agent/tool failures in Sentry too. Show at least one genuine example of observability helping you improve the hack itself, such as a duplicate webhook causing duplicate work that you diagnosed and fixed.
+Done when: a reviewer can reconstruct why the system acted and what remains broken.
+Stage 9 — Validate and present the complete story
+Use this demo sequence:
+Scene	What it proves
+Healthy baseline	The app genuinely works before injection
+First recommendation incident	Real Sentry evidence drives investigation
+Phone decision	The engineer responds without opening Slack
+Mitigation and verification	A tool changes the app and recovery is measured
+Runbook generation and evaluation	The intervention becomes a tested procedure
+Matching recurrence	Pre-authorised automation works
+Payment counterexample	Similar symptoms do not trigger the wrong procedure
+
+
+Measure:
+- Alert-to-acknowledgement time.
+- Alert-to-verified-recovery time.
+- Number of human decisions.
+- Correct runbook selections and refusals.
+- Unnecessary actions.
+- Duplicate alerts suppressed.
+Label all results as controlled demo measurements.
+Scope priority: finish the real failure → Sentry → CREAO → phone approval → verified recovery path first. Then finish runbook generation and evaluation. Add dashboard polish last.
+Defer full scheduling, multi-party conference calls, automatic code deployment, broad infrastructure actions, and multi-channel support.
+Final positioning: SecondShift combines familiar incident-management essentials with a focused experiment: can a human intervention become a tested, narrowly authorised automation, while unresolved cases reach the engineer through an actionable phone conversation? That is the claim your implementation and demo should prove.
