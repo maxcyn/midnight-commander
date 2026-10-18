@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { fileURLToPath } from "node:url";
 import * as Sentry from "@sentry/node";
 import express, { type NextFunction, type Request, type Response } from "express";
 
@@ -81,7 +82,7 @@ function validateBasket(body: any): { items: BasketItem[]; total: number } {
 
 const app = express();
 app.use(express.json());
-app.use(express.static(new URL("../public", import.meta.url).pathname));
+app.use(express.static(fileURLToPath(new URL("../public", import.meta.url))));
 
 app.post("/checkout", async (req, res) => {
   const requestId = (req.get("x-request-id") ?? randomUUID()).slice(0, 64);
