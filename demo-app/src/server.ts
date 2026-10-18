@@ -18,9 +18,14 @@ const CATALOG: Record<string, number> = { "sku-tee": 20, "sku-mug": 12, "sku-cap
 // Feature flag the mitigation changes, plus fault switches only the test runner can set.
 const state = {
   recommendationsEnabled: true,
-  faults: { recommendation: false, payment: false },
+  paymentProvider: "primary" as "primary" | "backup",
+  // providerDegradation: the primary provider is slow and exhausts the connection pool it shares with
+  // the recommendation client. Recommendations time out as a side effect, so the visible symptom is misleading.
+  faults: { recommendation: false, payment: false, providerDegradation: false },
   flagHistory: [] as { at: string; from: boolean; to: boolean; by: string }[],
+  providerHistory: [] as { at: string; from: string; to: string; by: string }[],
 };
+const poolSaturated = () => state.faults.providerDegradation && state.paymentProvider === "primary";
 
 interface RequestRecord {
   at: string;
@@ -46,7 +51,7 @@ class DependencyError extends Error {
 
 async function lookupRecommendations(): Promise<string[]> {
   const call = async () => {
-    await sleep(state.faults.recommendation ? 3000 : 40);
+    await sleep(state.faults.recommendation || poolSaturated() ? 3000 : 40);
     return ["sku-mug", "sku-cap"];
   };
   const timeout = new Promise<never>((_, reject) =>
@@ -59,7 +64,12 @@ async function lookupRecommendations(): Promise<string[]> {
 }
 
 async function simulatedPayment(amount: number): Promise<string> {
-  await sleep(60);
+  // A zero-amount probe is a cheap authorisation check: it still answers, only slowly, while the pool is saturated.
+  // A real charge waits on the saturated pool and then fails.
+  if (poolSaturated()) {
+    await sleep(amount === 0 ? 1800 : 2500);
+    if (amount !== 0) throw new DependencyError("payment", "payment provider timed out waiting for a connection", 502);
+  } else await sleep(60);
   if (state.faults.payment) throw new DependencyError("payment", "payment provider declined the charge (simulated outage)", 502);
   return `pay_${randomUUID().slice(0, 8)}`;
 }
@@ -96,7 +106,7 @@ app.post("/checkout", async (req, res) => {
       latencyMs: Date.now() - started,
       recommendationsEnabled: state.recommendationsEnabled, error,
     });
-  const attrs = { request_id: requestId, run_id: runId, recommendations_enabled: state.recommendationsEnabled };
+  const attrs = { request_id: requestId, run_id: runId, recommendations_enabled: state.recommendationsEnabled, payment_provider: state.paymentProvider };
 
   await Sentry.startSpan({ name: "checkout", op: "checkout", attributes: attrs }, async (span) => {
     Sentry.setTags({ request_id: requestId, run_id: runId });
@@ -153,6 +163,7 @@ const bearer = (token: string) => (req: Request, res: Response, next: NextFuncti
 app.post("/dev/faults", bearer(DEV_TOKEN), (req, res) => {
   if (typeof req.body?.recommendation === "boolean") state.faults.recommendation = req.body.recommendation;
   if (typeof req.body?.payment === "boolean") state.faults.payment = req.body.payment;
+  if (typeof req.body?.providerDegradation === "boolean") state.faults.providerDegradation = req.body.providerDegradation;
   res.json(state.faults);
 });
 
@@ -164,16 +175,29 @@ app.post("/dev/recommendations", bearer(DEV_TOKEN), (req, res) => {
   res.json({ recommendationsEnabled: state.recommendationsEnabled });
 });
 
+// Stands in for the engineer fixing things in their own tooling, outside the responder backend.
+app.post("/dev/payment-provider", bearer(DEV_TOKEN), (req, res) => {
+  if (req.body?.provider !== "primary" && req.body?.provider !== "backup") return res.status(400).json({ error: "provider must be primary or backup" });
+  if (state.paymentProvider !== req.body.provider) {
+    state.providerHistory.push({ at: new Date().toISOString(), from: state.paymentProvider, to: req.body.provider, by: "engineer" });
+    state.paymentProvider = req.body.provider;
+    Sentry.logger.info("payment provider changed", { to: req.body.provider, by: "engineer" });
+  }
+  res.json({ paymentProvider: state.paymentProvider });
+});
+
 app.post("/dev/reset", bearer(DEV_TOKEN), (_req, res) => {
   state.recommendationsEnabled = true;
-  state.faults = { recommendation: false, payment: false };
+  state.faults = { recommendation: false, payment: false, providerDegradation: false };
+  state.paymentProvider = "primary";
   state.flagHistory = [];
+  state.providerHistory = [];
   requestLog.length = 0;
   res.json({ reset: true });
 });
 
 app.get("/dev/state", bearer(DEV_TOKEN), (_req, res) => {
-  res.json({ recommendationsEnabled: state.recommendationsEnabled, faults: state.faults });
+  res.json({ recommendationsEnabled: state.recommendationsEnabled, paymentProvider: state.paymentProvider, faults: state.faults });
 });
 
 // ---- Evidence the responder may read (no fault labels) -------------------
@@ -183,7 +207,7 @@ app.get("/requests", bearer(PROBE_TOKEN), (req, res) => {
 });
 
 app.get("/config", bearer(PROBE_TOKEN), (_req, res) => {
-  res.json({ recommendationsEnabled: state.recommendationsEnabled, flagHistory: state.flagHistory });
+  res.json({ recommendationsEnabled: state.recommendationsEnabled, paymentProvider: state.paymentProvider, flagHistory: state.flagHistory, providerHistory: state.providerHistory });
 });
 
 // Independent, read-only probes: they exercise the dependency directly, not via checkout,
@@ -217,6 +241,23 @@ app.post("/actions/disable-recommendations", bearer(ACTION_TOKEN), (req, res) =>
     action: "disable_recommendations", previous_value: previous, current_value: false, actor: String(req.body?.actor ?? "responder"),
   });
   res.json({ action: "disable_recommendations", previousValue: previous, currentValue: false, changed: previous });
+});
+
+// Second mitigation: an explicit target state, never a toggle. A retry cannot flip it back.
+app.post("/actions/switch-payment-provider", bearer(ACTION_TOKEN), (req, res) => {
+  const previous = state.paymentProvider;
+  if (req.body?.expectedPreviousValue === "primary" && previous !== "primary") {
+    return res.status(409).json({ error: "precondition failed: payment provider is already the backup", currentValue: previous });
+  }
+  const actor = String(req.body?.actor ?? "responder");
+  if (previous !== "backup") {
+    state.providerHistory.push({ at: new Date().toISOString(), from: previous, to: "backup", by: actor });
+    state.paymentProvider = "backup";
+  }
+  Sentry.logger.info(previous !== "backup" ? "mitigation applied: payment provider switched to backup" : "mitigation skipped: already on backup", {
+    action: "switch_payment_provider", previous_value: previous, current_value: "backup", actor,
+  });
+  res.json({ action: "switch_payment_provider", previousValue: previous, currentValue: "backup", changed: previous !== "backup" });
 });
 
 app.listen(PORT, () => console.log(`demo app on http://localhost:${PORT}`));

@@ -6,6 +6,8 @@ import { getEvidence } from "./sentry.js";
 
 const now = () => new Date().toISOString();
 const demoUrl = () => process.env.DEMO_APP_URL ?? "http://localhost:4000";
+// Seam so tests can supply telemetry without a live Sentry; production always uses the real adapter.
+export const verificationDeps = { getEvidence };
 const verificationTimers = new Map<number, NodeJS.Timeout>();
 const VERIFICATION_LIMIT_MS = 120_000;
 const VERIFICATION_INTERVAL_MS = 5_000;
@@ -31,16 +33,34 @@ async function demoGet(path: string) {
   return body as Record<string, unknown>;
 }
 
-async function checkApplicability(environment: string) {
+// A payment probe that passes but is far slower than its normal tens of milliseconds means the payment path is
+// degraded. Recommendation timeouts alongside it can be a side effect of a shared connection pool.
+const SLOW_PAYMENT_PROBE_MS = 1000;
+const paymentSlow = (probe: Record<string, unknown>) => typeof probe.latencyMs === "number" && probe.latencyMs > SLOW_PAYMENT_PROBE_MS;
+
+// What each allowed action does on the demo app, and how its result is confirmed. Both are explicit target
+// states, never toggles, so a retry cannot reverse them.
+const ACTIONS: Record<string, { path: string; body: Record<string, unknown>; confirmed: (r: Record<string, unknown>) => boolean }> = {
+  disable_recommendations: { path: "/actions/disable-recommendations", body: { expectedPreviousValue: true }, confirmed: (r) => r.currentValue === false },
+  switch_payment_provider: { path: "/actions/switch-payment-provider", body: { expectedPreviousValue: "primary" }, confirmed: (r) => r.currentValue === "backup" },
+};
+
+async function checkApplicability(environment: string, actionName = "disable_recommendations") {
   const [config, recommendationProbe, paymentProbe] = await Promise.all([
     demoGet("/config"),
     demoGet("/probe/recommendations"),
     demoGet("/probe/payments"),
   ]);
+  if (environment !== "demo") throw new Error(`refusing to mutate non-demo environment '${environment}'`);
+  if (actionName === "switch_payment_provider") {
+    if (config.paymentProvider !== "primary") throw new Error("payments are already on the backup provider");
+    if (!paymentSlow(paymentProbe) && paymentProbe.healthy !== false) throw new Error("fresh payment probe does not show a degraded provider");
+    return;
+  }
   if (config.recommendationsEnabled !== true) throw new Error("recommendations are already disabled");
   if (recommendationProbe.healthy !== false) throw new Error("fresh recommendation probe does not confirm a failure");
   if (paymentProbe.healthy !== true) throw new Error("payment probe is unhealthy or inconclusive");
-  if (environment !== "demo") throw new Error(`refusing to mutate non-demo environment '${environment}'`);
+  if (paymentSlow(paymentProbe)) throw new Error("payment probe is healthy but slow: the shared connection pool may be saturated by the payment provider, so disabling recommendations is unlikely to restore checkout");
 }
 
 export async function verifyAuthorisedRunbookApplicability(incidentId: number, runbookId: string, version: number) {
@@ -80,22 +100,34 @@ export async function approveAndExecute(
   return executeAction(incidentId, actionId, actor);
 }
 
-export function declineAction(incidentId: number, actionId: number, actor: string) {
+export function declineAction(incidentId: number, actionId: number, actor: string, reason?: string) {
   const incident = getIncident(incidentId);
   if (!incident) throw new Error(`incident ${incidentId} not found`);
   if (incident.status !== "awaiting_decision") throw new Error(`incident is ${incident.status}, not awaiting a decision`);
   if (!responderRole(actor, incident.escalation_state === "escalated_to_backup")) {
     throw new Error("actor is not an authorised responder for this incident");
   }
-  const action = db.prepare(`SELECT approval_state, expires_at FROM proposed_actions WHERE id = ? AND incident_id = ?`)
-    .get(actionId, incidentId) as { approval_state: string; expires_at: string } | undefined;
+  const action = db.prepare(`SELECT action, approval_state, expires_at FROM proposed_actions WHERE id = ? AND incident_id = ?`)
+    .get(actionId, incidentId) as { action: string; approval_state: string; expires_at: string } | undefined;
   if (!action) throw new Error("proposed action not found for this incident");
   if (action.approval_state !== "pending") throw new Error(`action is ${action.approval_state}, not pending`);
   const expired = Date.parse(action.expires_at) <= Date.now();
   db.prepare(`UPDATE proposed_actions SET approval_state = ? WHERE id = ?`)
     .run(expired ? "expired" : "rejected", actionId);
-  addTimeline(incidentId, actor, expired ? "action_approval_expired" : "action_declined", { actionId }, "rejected");
-  return { ok: true, actionId, status: expired ? "expired" : "rejected" };
+  const why = reason?.trim() || null;
+  addTimeline(incidentId, actor, expired ? "action_approval_expired" : "action_declined", { actionId, reason: why }, "rejected");
+  if (!expired) {
+    // Keep what the system believed at the time next to what the engineer said, for later investigations.
+    const inv = db.prepare(`SELECT result FROM investigations WHERE incident_id = ? AND result IS NOT NULL ORDER BY id DESC LIMIT 1`)
+      .get(incidentId) as { result: string } | undefined;
+    const r = inv ? JSON.parse(inv.result) : null;
+    db.prepare(
+      `INSERT OR IGNORE INTO decision_feedback (incident_id, proposed_action_id, service, environment, action, decision, reason, responder, diagnosis, decided_at)
+       VALUES (?, ?, ?, ?, ?, 'declined', ?, ?, ?, ?)`,
+    ).run(incidentId, actionId, incident.service, incident.environment, action.action, why, actor,
+      r ? JSON.stringify({ impact: r.impact?.summary, hypotheses: (r.hypotheses ?? []).map((h: any) => `${h.cause}:${h.status}`), proposed: r.proposed_action?.action ?? null }) : null, now());
+  }
+  return { ok: true, actionId, status: expired ? "expired" : "rejected", reasonRecorded: !expired && !!why };
 }
 
 export async function executeAuthorisedRunbook(
@@ -157,12 +189,12 @@ async function executeAction(
     addTimeline(incidentId, actor, "action_approval_expired", { actionId }, "rejected");
     throw new Error("proposed action has expired");
   }
-  if (action.action !== "disable_recommendations" || action.target_environment !== incident.environment) {
+  if (!ACTIONS[action.action] || action.target_environment !== incident.environment) {
     throw new Error("action or target does not match the permitted operation for this incident");
   }
 
   try {
-    await checkApplicability(action.target_environment);
+    await checkApplicability(action.target_environment, action.action);
   } catch (error) {
     const reason = error instanceof Error ? error.message : String(error);
     addTimeline(incidentId, actor, "action_blocked_by_fresh_checks", { actionId, reason }, "rejected");
@@ -213,16 +245,16 @@ async function executeAction(
   try {
     const token = process.env.DEMO_ACTION_TOKEN;
     if (!token) throw new Error("DEMO_ACTION_TOKEN is not set");
-    const response = await fetch(`${demoUrl()}/actions/disable-recommendations`, {
+    const response = await fetch(`${demoUrl()}${ACTIONS[action.action].path}`, {
       method: "POST",
       headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-      body: JSON.stringify({ actor, expectedPreviousValue: true }),
+      body: JSON.stringify({ actor, ...ACTIONS[action.action].body }),
       signal: AbortSignal.timeout(5_000),
     });
     const result: unknown = await response.json().catch(() => ({}));
     if (!response.ok) throw new Error(`Mitigation endpoint returned ${response.status}: ${JSON.stringify(result)}`);
     const body = result as Record<string, unknown>;
-    if (body.currentValue !== false) throw new Error("Mitigation response did not confirm recommendations are disabled");
+    if (!ACTIONS[action.action].confirmed(body)) throw new Error(`Mitigation response did not confirm the '${action.action}' target state`);
     db.prepare(`UPDATE action_executions SET status = 'executed', result = ? WHERE id = ?`)
       .run(JSON.stringify(body), executionId);
     db.prepare(`UPDATE proposed_actions SET approval_state = 'executed' WHERE id = ?`).run(actionId);
@@ -271,7 +303,7 @@ function scheduleVerification(executionId: number, incidentId: number) {
       telemetryError = "incident has no opaque run_id; successful traces cannot be correlated safely";
     } else {
       try {
-        const evidence = await getEvidence(
+        const evidence = await verificationDeps.getEvidence(
           Math.min(120, Math.max(2, Math.ceil((Date.now() - actionAt) / 60_000) + 1)),
           String(incident.run_id),
         );
@@ -351,7 +383,8 @@ export function evaluateRunbookApplicability(facts: RunbookFacts) {
 }
 
 function evaluateFixedRunbookCases() {
-  const cases = [
+  type Case = RunbookFacts & { name: string; issueId: string; expected: boolean; suite?: "fixed" | "held_out" };
+  const cases: Case[] = [
     { name: "recommendation timeout", issueId: "fixed-1", evidenceFresh: true, recommendationFailureSupported: true, recommendationHealthy: false, paymentHealthy: true, recommendationsEnabled: true, operationAllowed: true, environment: "demo", expected: true },
     { name: "matching recurrence with a new issue id", issueId: "held-out-47", evidenceFresh: true, recommendationFailureSupported: true, recommendationHealthy: false, paymentHealthy: true, recommendationsEnabled: true, operationAllowed: true, environment: "demo", expected: true },
     { name: "payment failure only", issueId: "fixed-2", evidenceFresh: true, recommendationFailureSupported: false, recommendationHealthy: true, paymentHealthy: false, recommendationsEnabled: true, operationAllowed: true, environment: "demo", expected: false },
@@ -360,10 +393,16 @@ function evaluateFixedRunbookCases() {
     { name: "recommendations already disabled", issueId: "fixed-5", evidenceFresh: true, recommendationFailureSupported: true, recommendationHealthy: false, paymentHealthy: true, recommendationsEnabled: false, operationAllowed: true, environment: "demo", expected: false },
     { name: "action rejected or ineffective", issueId: "fixed-6", evidenceFresh: true, recommendationFailureSupported: true, recommendationHealthy: false, paymentHealthy: true, recommendationsEnabled: true, operationAllowed: false, environment: "demo", expected: false },
     { name: "out-of-scope environment", issueId: "fixed-7", evidenceFresh: true, recommendationFailureSupported: true, recommendationHealthy: false, paymentHealthy: true, recommendationsEnabled: true, operationAllowed: true, environment: "production", expected: false },
+    // Held-out variations: written independently of the runbook the system generates, and never derived from it.
+    { name: "held-out: second recurrence, different issue id", issueId: "held-out-48", suite: "held_out", evidenceFresh: true, recommendationFailureSupported: true, recommendationHealthy: false, paymentHealthy: true, recommendationsEnabled: true, operationAllowed: true, environment: "demo", expected: true },
+    { name: "held-out: payment health unknown, so do not act", issueId: "held-out-49", suite: "held_out", evidenceFresh: true, recommendationFailureSupported: true, recommendationHealthy: false, paymentHealthy: undefined as unknown as boolean, recommendationsEnabled: true, operationAllowed: true, environment: "demo", expected: false },
+    { name: "held-out: recommendations healthy again, symptom gone", issueId: "held-out-50", suite: "held_out", evidenceFresh: true, recommendationFailureSupported: true, recommendationHealthy: true, paymentHealthy: true, recommendationsEnabled: true, operationAllowed: true, environment: "demo", expected: false },
+    { name: "held-out: stale evidence despite failing probes", issueId: "held-out-51", suite: "held_out", evidenceFresh: false, recommendationFailureSupported: true, recommendationHealthy: false, paymentHealthy: true, recommendationsEnabled: true, operationAllowed: true, environment: "demo", expected: false },
+    { name: "held-out: payment failure with recommendations also disabled", issueId: "held-out-52", suite: "held_out", evidenceFresh: true, recommendationFailureSupported: false, recommendationHealthy: true, paymentHealthy: false, recommendationsEnabled: false, operationAllowed: true, environment: "demo", expected: false },
   ];
   return cases.map((test) => {
     const selected = evaluateRunbookApplicability(test);
-    return { name: test.name, issueId: test.issueId, expected: test.expected, selected, passed: selected === test.expected };
+    return { name: test.name, issueId: test.issueId, suite: test.suite ?? "fixed", expected: test.expected, selected, passed: selected === test.expected };
   });
 }
 
@@ -431,15 +470,83 @@ function finishRecovery(executionId: number, incidentId: number, result: Record<
     .run(now(), JSON.stringify(result), executionId);
   addTimeline(incidentId, "system", "recovery_verified", result);
   transition(incidentId, "recovered", "system", result);
-  const execution = db.prepare(`SELECT actor FROM action_executions WHERE id = ?`).get(executionId) as { actor: string };
-  if (!execution.actor.startsWith("runbook:")) createLearnedRunbook(incidentId, executionId, result);
+  const execution = db.prepare(
+    `SELECT e.actor, e.result, p.action FROM action_executions e JOIN proposed_actions p ON p.id = e.proposed_action_id WHERE e.id = ?`,
+  ).get(executionId) as { actor: string; result: string | null; action: string };
+  // A runbook is only learned from a disable_recommendations intervention, and never from a runbook's own run.
+  if (execution.action === "disable_recommendations" && !execution.actor.startsWith("runbook:")) createLearnedRunbook(incidentId, executionId, result);
+  const outcome = RETROSPECTIVES[execution.action] ?? RETROSPECTIVES.disable_recommendations;
   db.prepare(`INSERT OR REPLACE INTO retrospectives (incident_id, summary, unresolved_work, generated_at) VALUES (?, ?, ?, ?)`)
-    .run(incidentId, "Checkout recovered; recommendations remain disabled.",
-      "Make checkout tolerate recommendation outages; the recommendation dependency itself was not repaired.", now());
-  addTimeline(incidentId, "system", "retrospective_generated", {
+    .run(incidentId, outcome.summary, outcome.unresolved, now());
+  addTimeline(incidentId, "system", "retrospective_generated", { summary: outcome.summary, followUp: outcome.followUp });
+  // Close the loop on any declined proposal: record what actually restored service, for later investigations.
+  const how = execution.actor.startsWith("manual:")
+    ? `${execution.action} was applied by the engineer (${execution.actor.slice(7)}): ${JSON.parse(execution.result ?? "{}").note ?? "no note"}. Checkout recovered after verification.`
+    : `${execution.action} restored checkout after verification.`;
+  db.prepare(`UPDATE decision_feedback SET resolution = ? WHERE incident_id = ? AND resolution IS NULL`).run(how, incidentId);
+}
+
+const RETROSPECTIVES: Record<string, { summary: string; unresolved: string; followUp: string }> = {
+  disable_recommendations: {
     summary: "Checkout recovered; recommendations remain disabled.",
+    unresolved: "Make checkout tolerate recommendation outages; the recommendation dependency itself was not repaired.",
     followUp: "Make checkout tolerate recommendation outages.",
-  });
+  },
+  switch_payment_provider: {
+    summary: "Checkout recovered; payments are running on the backup provider.",
+    unresolved: "The primary payment provider is still degraded and was not repaired; decide when to switch back, and stop recommendation lookups sharing the payment connection pool.",
+    followUp: "Isolate the recommendation client's connection pool from the payment provider.",
+  },
+};
+
+// Earlier engineer decisions on this service and environment, for the investigator. They inform a proposal and
+// never grant permission; the executor still checks fresh evidence before anything runs.
+export function pastDecisions(incidentId: number) {
+  const inc = getIncident(incidentId);
+  if (!inc) return undefined;
+  const rows = db.prepare(
+    `SELECT id, incident_id, action, decision, reason, diagnosis, resolution, decided_at FROM decision_feedback
+     WHERE service = ? AND environment = ? AND incident_id != ? ORDER BY id DESC LIMIT 10`,
+  ).all(inc.service, inc.environment, inc.id) as any[];
+  return {
+    note: "These inform your proposal. Cite the ids you used in consulted_decisions and say how they changed it in lesson_applied. They do not permit any action.",
+    decisions: rows.map((r) => ({
+      decision_id: r.id, incident_id: r.incident_id, action: r.action, decision: r.decision,
+      engineer_reason: r.reason, what_the_system_believed_then: r.diagnosis ? JSON.parse(r.diagnosis) : null,
+      what_actually_fixed_it: r.resolution, decided_at: r.decided_at,
+    })),
+  };
+}
+
+// The engineer fixed it themselves (outside this system) after declining or taking over. Record what they did,
+// then run the same verification as any mitigation. Verification, not the engineer's say-so, decides "recovered".
+export function recordManualResolution(incidentId: number, actor: string, actionName: string, note: string) {
+  const incident = getIncident(incidentId);
+  if (!incident) throw new Error(`incident ${incidentId} not found`);
+  if (incident.status !== "awaiting_decision") throw new Error(`incident is ${incident.status}, not awaiting a decision`);
+  if (!responderRole(actor, incident.escalation_state === "escalated_to_backup")) throw new Error("actor is not an authorised responder for this incident");
+  if (!ACTIONS[actionName]) throw new Error(`unknown action '${actionName}'; expected one of ${Object.keys(ACTIONS).join(", ")}`);
+  if (!note.trim()) throw new Error("note is required: say what you did");
+  db.exec("BEGIN IMMEDIATE");
+  let executionId: number;
+  try {
+    const proposed = db.prepare(
+      `INSERT INTO proposed_actions (incident_id, action, target_environment, parameters, expires_at, approval_state, approved_by, created_at)
+       VALUES (?, ?, ?, ?, ?, 'executed', ?, ?)`,
+    ).run(incidentId, actionName, incident.environment, JSON.stringify({ manual: true }), now(), actor, now());
+    executionId = Number(db.prepare(
+      `INSERT INTO action_executions (proposed_action_id, incident_id, actor, status, started_at, result) VALUES (?, ?, ?, 'executed', ?, ?)`,
+    ).run(Number(proposed.lastInsertRowid), incidentId, `manual:${actor}`, now(), JSON.stringify({ manual: true, action: actionName, note })).lastInsertRowid);
+    transition(incidentId, "mitigating", actor, { executionId, manual: true });
+    addTimeline(incidentId, actor, "manual_resolution_recorded", { executionId, action: actionName, note });
+    transition(incidentId, "verifying", "system", { executionId, startedAt: now() });
+    db.exec("COMMIT");
+  } catch (error) {
+    db.exec("ROLLBACK");
+    throw error;
+  }
+  scheduleVerification(executionId, incidentId);
+  return { executionId, status: "verifying" };
 }
 
 export function authoriseRunbook(runbookId: string, version: number, actor: string) {

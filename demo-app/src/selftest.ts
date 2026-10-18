@@ -54,6 +54,36 @@ r = await checkout();
 check("same action does NOT repair payment failure", r.status === 502 && r.body.stage === "payment", JSON.stringify(r));
 check("probe: payments unhealthy", (await getProbe("payments")).healthy === false);
 
+// Provider degradation: the visible symptom is recommendations, the cause is the payment provider.
+await post("/dev/reset", dev);
+await post("/dev/faults", dev, { providerDegradation: true });
+r = await checkout();
+check("provider degradation surfaces as a recommendation timeout (payment never reached)", r.status === 504 && r.body.stage === "recommendations", JSON.stringify(r));
+check("probe: recommendations unhealthy under degradation", (await getProbe("recommendations")).healthy === false);
+const payProbe = await getProbe("payments");
+check("probe: payments still 'healthy' but slow (the only clue)", payProbe.healthy === true && payProbe.latencyMs > 1000, JSON.stringify(payProbe));
+await post("/actions/disable-recommendations", act);
+r = await checkout();
+check("disabling recommendations does NOT fix provider degradation", r.status === 502 && r.body.stage === "payment", JSON.stringify(r));
+a = await post("/actions/switch-payment-provider", act, { actor: "selftest", expectedPreviousValue: "primary" });
+check("switch action changes provider and records previous value", a.changed === true && a.previousValue === "primary" && a.currentValue === "backup", JSON.stringify(a));
+r = await checkout();
+check("switching provider restores checkout", r.status === 200 && !!r.body.orderId, JSON.stringify(r));
+a = await post("/actions/switch-payment-provider", act, { actor: "selftest" });
+check("switch is idempotent, not a toggle", a.changed === false && a.currentValue === "backup", JSON.stringify(a));
+const pre = await fetch(BASE + "/actions/switch-payment-provider", { method: "POST", headers: act, body: JSON.stringify({ expectedPreviousValue: "primary" }) });
+check("switch refuses when its precondition no longer holds", pre.status === 409);
+
+await post("/dev/reset", dev);
+await post("/dev/faults", dev, { providerDegradation: true });
+await post("/actions/switch-payment-provider", act);
+await post("/dev/reset", dev);
+await post("/dev/faults", dev, { recommendation: true });
+await post("/actions/switch-payment-provider", act);
+r = await checkout();
+check("switching provider does NOT fix a genuine recommendation outage", r.status === 504 && r.body.stage === "recommendations", JSON.stringify(r));
+await post("/dev/reset", dev);
+
 const noAuth = await fetch(BASE + "/actions/disable-recommendations", { method: "POST" });
 check("mitigation rejects missing auth", noAuth.status === 401);
 const wrongToken = await fetch(BASE + "/dev/faults", {

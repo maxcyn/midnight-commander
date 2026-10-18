@@ -184,5 +184,6 @@ export function incidentDetail(id: number) {
     calls: db.prepare(`SELECT * FROM calls WHERE incident_id = ? ORDER BY id`).all(id),
     executions: db.prepare(`SELECT * FROM action_executions WHERE incident_id = ? ORDER BY id`).all(id),
     retrospective: db.prepare(`SELECT * FROM retrospectives WHERE incident_id = ?`).get(id) ?? null,
+    decisions: db.prepare(`SELECT * FROM decision_feedback WHERE incident_id = ? ORDER BY id`).all(id),
   };
 }

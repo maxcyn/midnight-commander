@@ -17,8 +17,10 @@
     <div class="row"><label><input type="checkbox" id="recommendationsEnabled"> Recommendations feature enabled</label></div>
     <div class="row"><label><input type="checkbox" id="recommendation"> Recommendation lookup times out</label></div>
     <div class="row"><label><input type="checkbox" id="payment"> Payment provider fails</label></div>
+    <div class="row"><label><input type="checkbox" id="providerDegradation"> Primary payment provider degraded (saturates shared pool)</label></div>
     <button id="save">Apply fault controls</button>
     <button id="reset" class="danger">Reset test state</button>
+    <button id="switchProvider">Engineer fix: switch payments to backup provider</button>
   </section>
   <div id="status" class="status" role="status">Connect with the test-runner token.</div>
 <script>
@@ -43,8 +45,9 @@
     if (!response.ok) throw new Error(state.error || `Request failed (${response.status})`);
     $("recommendation").checked = state.faults.recommendation;
     $("payment").checked = state.faults.payment;
+    $("providerDegradation").checked = state.faults.providerDegradation;
     $("recommendationsEnabled").checked = state.recommendationsEnabled;
-    report(`Connected · recommendation fault ${state.faults.recommendation ? "on" : "off"} · payment fault ${state.faults.payment ? "on" : "off"}`);
+    report(`Connected · recommendation fault ${state.faults.recommendation ? "on" : "off"} · payment fault ${state.faults.payment ? "on" : "off"} · provider degradation ${state.faults.providerDegradation ? "on" : "off"} · provider ${state.paymentProvider}`);
   }
   $("connect").addEventListener("submit", (event) => {
     event.preventDefault();
@@ -54,9 +57,13 @@
   $("save").addEventListener("click", async () => {
     try {
       await api("/dev/recommendations", { enabled: $("recommendationsEnabled").checked });
-      await api("/dev/faults", { recommendation: $("recommendation").checked, payment: $("payment").checked });
+      await api("/dev/faults", { recommendation: $("recommendation").checked, payment: $("payment").checked, providerDegradation: $("providerDegradation").checked });
       await refresh();
     }
+    catch (error) { report(error.message); }
+  });
+  $("switchProvider").addEventListener("click", async () => {
+    try { await api("/dev/payment-provider", { provider: "backup" }); await refresh(); }
     catch (error) { report(error.message); }
   });
   $("reset").addEventListener("click", async () => {

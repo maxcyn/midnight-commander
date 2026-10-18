@@ -55,6 +55,31 @@ check("action outside the allowlist is refused", d.final === "escalate_without_a
 d = decide(base({ proposed_action: null }), false);
 check("supported cause but no proposable action -> engineer decides, nothing proposed", d.final === "request_engineer_decision" && !d.proposeAction, JSON.stringify(d));
 
+d = decide(base({
+  hypotheses: [{ cause: "payment_provider_degradation", status: "supported" }, { cause: "recommendations_timeout", status: "contradicted" }],
+  proposed_action: { action: "switch_payment_provider", target_environment: "demo", expected_tradeoff: "backup provider has lower limits" },
+}), false);
+check("provider degradation + provider switch -> proposed for the engineer", d.final === "request_engineer_decision" && d.proposeAction, JSON.stringify(d));
+
+d = decide(base({
+  hypotheses: [{ cause: "payment_provider_degradation", status: "supported" }, { cause: "recommendations_timeout", status: "contradicted" }],
+}), false);
+check("provider degradation + disable_recommendations -> refused (wrong action for this cause)", d.final === "escalate_without_action" && !d.proposeAction, JSON.stringify(d));
+
+d = decide(base({ proposed_action: { action: "switch_payment_provider", target_environment: "demo" } }), false);
+check("provider switch for a recommendation outage -> refused", d.final === "escalate_without_action" && !d.proposeAction, JSON.stringify(d));
+
+check("consulted_decisions is validated", !validateResult({ ...base(), consulted_decisions: ["one"] }).ok && validateResult({ ...base(), consulted_decisions: [1, 2] }).ok);
+check("a past decision cannot grant an allowlisted action by itself", decide(base({ consulted_decisions: [1], lesson_applied: "engineer said do it", proposed_action: { action: "restart_database", target_environment: "demo" } }), false).final === "escalate_without_action");
+
+d = decide(base({ non_blocking_unknowns: ["root cause of the recommendation timeouts is not explained"] }), false);
+check("non-blocking unknowns do not stop a supported proposal", d.final === "request_engineer_decision" && d.proposeAction, JSON.stringify(d));
+d = decide(base({ missing_information: ["payment probe failed"], non_blocking_unknowns: ["root cause unknown"] }), false);
+check("blocking missing information still escalates without an action", d.final === "escalate_without_action" && !d.proposeAction, JSON.stringify(d));
+d = decide(base({ non_blocking_unknowns: ["x"], hypotheses: [{ cause: "unknown", status: "inconclusive" }] }), false);
+check("non-blocking unknowns cannot rescue an unsupported diagnosis", d.final === "escalate_without_action" && !d.proposeAction, JSON.stringify(d));
+check("non_blocking_unknowns is validated", !validateResult({ ...base(), non_blocking_unknowns: [1] }).ok && validateResult({ ...base(), non_blocking_unknowns: ["a"] }).ok);
+
 check("valid result accepted", validateResult(base()).ok === true);
 const bad = validateResult({ ...base(), recommendation: "do_it_now", hypotheses: [{ cause: "dns", status: "97% sure" }] });
 check("invalid enum values are rejected with reasons", !bad.ok && bad.errors.length >= 3, JSON.stringify(bad));

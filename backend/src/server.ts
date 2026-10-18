@@ -1,3 +1,4 @@
+import { computeMetrics } from "./metrics.js";
 import express, { type NextFunction, type Request, type Response } from "express";
 import { db } from "./db.js";
 import { createHmac, timingSafeEqual } from "node:crypto";
@@ -8,7 +9,7 @@ import { getEvidence } from "./sentry.js";
 import { startInvestigation, submitInvestigation, validateResult, onRunFinished } from "./investigation.js";
 import { reportBackendError } from "./monitoring.js";
 import { acknowledge, addEvidence, escalate, getIncident, incidentDetail, listIncidents, parseSentryAlert, processAlert, takeOver } from "./incidents.js";
-import { approveAndExecute, approveVoiceAction, authoriseRunbook, declineAction, executeAuthorisedRunbook, notifyResponder, recordPhoneOutcome, suspendRunbook, verifyAuthorisedRunbookApplicability } from "./workflows.js";
+import { approveAndExecute, approveVoiceAction, authoriseRunbook, declineAction, executeAuthorisedRunbook, notifyResponder, pastDecisions, recordManualResolution, recordPhoneOutcome, suspendRunbook, verifyAuthorisedRunbookApplicability } from "./workflows.js";
 import { approveProposedAction, getCall, getLatestCallForIncident, getVoiceBriefing, getVoiceStatus, initiateCall, recordCallOutcome, runVoiceProbe, voiceTakeOver, type CallOutcome } from "./voice.js";
 
 const PORT = Number(process.env.PORT ?? 3000);
@@ -66,36 +67,7 @@ app.get("/dashboard-api/responders", (req, res) => {
   });
 });
 app.get("/dashboard-api/incidents", dashboardAuth, (_req, res) => res.json(listIncidents()));
-app.get("/dashboard-api/metrics", dashboardAuth, (_req, res) => {
-  const incidents = db.prepare(
-    `SELECT i.opened_at, i.recovered_at,
-       (SELECT t.at FROM timeline_events t WHERE t.incident_id = i.id AND t.action = 'acknowledged' ORDER BY t.id LIMIT 1) AS acknowledged_at,
-       i.alert_count
-     FROM incidents i`,
-  ).all() as { opened_at: string; recovered_at: string | null; acknowledged_at: string | null; alert_count: number }[];
-  const average = (values: number[]) => values.length ? Math.round(values.reduce((sum, value) => sum + value, 0) / values.length) : null;
-  const ackDurations = incidents.flatMap((incident) => {
-    const duration = incident.acknowledged_at ? Date.parse(incident.acknowledged_at) - Date.parse(incident.opened_at) : NaN;
-    return Number.isFinite(duration) && duration >= 0 ? [duration] : [];
-  });
-  const recoveryDurations = incidents.flatMap((incident) => {
-    const duration = incident.recovered_at ? Date.parse(incident.recovered_at) - Date.parse(incident.opened_at) : NaN;
-    return Number.isFinite(duration) && duration >= 0 ? [duration] : [];
-  });
-  const humanDecisions = db.prepare(`SELECT COUNT(*) AS count FROM timeline_events WHERE action IN ('action_approved','action_declined')`).get() as { count: number };
-  const automatedActions = db.prepare(`SELECT COUNT(*) AS count FROM action_executions WHERE actor LIKE 'runbook:%'`).get() as { count: number };
-  const failedActions = db.prepare(`SELECT COUNT(*) AS count FROM action_executions WHERE status IN ('failed','verification_incomplete')`).get() as { count: number };
-  const retries = db.prepare(`SELECT COALESCE(SUM(retry_count), 0) AS count FROM webhook_retries`).get() as { count: number };
-  res.json({
-    averageAlertToAcknowledgementMs: average(ackDurations),
-    averageAlertToVerifiedRecoveryMs: average(recoveryDurations),
-    humanActionDecisions: humanDecisions.count,
-    authorisedRunbookExecutions: automatedActions.count,
-    unsuccessfulActions: failedActions.count,
-    repeatAlertsAttached: incidents.reduce((sum, incident) => sum + Math.max(0, incident.alert_count - 1), 0),
-    webhookRetriesSuppressed: retries.count,
-  });
-});
+app.get("/dashboard-api/metrics", dashboardAuth, (_req, res) => res.json(computeMetrics()));
 app.get("/dashboard-api/incidents/:id", dashboardAuth, (req, res) => {
   const detail = incidentDetail(Number(req.params.id));
   if (!detail) return res.status(404).json({ error: "incident not found" });
@@ -126,7 +98,7 @@ app.post("/dashboard-api/incidents/:id/actions/:actionId/approve", dashboardAuth
 });
 app.post("/dashboard-api/incidents/:id/actions/:actionId/decline", dashboardAuth, (req, res) => {
   try {
-    res.json(declineAction(Number(req.params.id), Number(req.params.actionId), req.get("x-responder")!));
+    res.json(declineAction(Number(req.params.id), Number(req.params.actionId), req.get("x-responder")!, typeof req.body?.reason === "string" ? req.body.reason : undefined));
   } catch (error) {
     res.status(409).json({ error: error instanceof Error ? error.message : String(error) });
   }
@@ -143,6 +115,14 @@ app.post("/dashboard-api/incidents/:id/notify", dashboardAuth, (req, res) => {
     res.status(202).json(notifyResponder(incident.id, target));
   } catch (error) {
     res.status(503).json({ error: error instanceof Error ? error.message : String(error) });
+  }
+});
+// "I fixed it myself": record what the engineer did, then verify recovery like any mitigation.
+app.post("/dashboard-api/incidents/:id/manual-resolution", dashboardAuth, (req, res) => {
+  try {
+    res.status(202).json(recordManualResolution(Number(req.params.id), req.get("x-responder")!, String(req.body?.action ?? ""), String(req.body?.note ?? "")));
+  } catch (error) {
+    res.status(409).json({ error: error instanceof Error ? error.message : String(error) });
   }
 });
 app.get("/dashboard-api/runbooks", dashboardAuth, (_req, res) => {
@@ -270,6 +250,12 @@ app.get("/tools/probe", requireToken, async (req, res) => {
   } catch (err) {
     res.status(502).json({ error: String(err) });
   }
+});
+
+app.get("/tools/past_decisions", requireToken, (req, res) => {
+  const out = pastDecisions(Number(req.query.incident_id));
+  if (!out) return res.status(404).json({ error: "incident not found" });
+  res.json(out);
 });
 
 app.get("/tools/runbooks", requireToken, (_req, res) => {
@@ -523,7 +509,7 @@ app.post("/voice/decline", voiceAuth, requireRetellSignature, (req, res) => {
   if (!call) return res.status(403).json({ error: "an active registered responder call is required" });
   if (typeof args.action_id !== "number") return res.status(400).json({ error: "action_id is required" });
   try {
-    const result = declineAction(call.incident_id, args.action_id, call.responder);
+    const result = declineAction(call.incident_id, args.action_id, call.responder, typeof args.reason === "string" ? args.reason : undefined);
     recordPhoneOutcome(callId, "acknowledged", `declined action ${args.action_id}`);
     res.json(result);
   } catch (error) {

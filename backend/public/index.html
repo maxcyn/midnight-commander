@@ -158,7 +158,29 @@
     if (incident.autonomy !== "halted" && incident.status !== "recovered") actions.append(button("I’ll take over", async () => runAction(`/dashboard-api/incidents/${incident.id}/take-over`, {}), "danger"));
     if (incident.status !== "recovered") actions.append(button("Call primary", async () => runAction(`/dashboard-api/incidents/${incident.id}/notify`, { target: "primary" })));
     if (incident.status !== "recovered" && incident.escalation_state === "escalated_to_backup") actions.append(button("Call backup", async () => runAction(`/dashboard-api/incidents/${incident.id}/notify`, { target: "backup" })));
+    if (incident.status === "awaiting_decision") actions.append(button("I fixed it myself…", async () => {
+      const action = prompt("What did you do? Type: switch_payment_provider or disable_recommendations");
+      if (!action) return;
+      const note = prompt("Describe your fix in a sentence (kept for later incidents):");
+      if (note) await runAction(`/dashboard-api/incidents/${incident.id}/manual-resolution`, { action: action.trim(), note });
+    }));
     root.append(actions);
+    if (data.decisions?.length) {
+      const lessons = document.createElement("section"); lessons.className = "section";
+      const lessonsTitle = document.createElement("h3"); lessonsTitle.textContent = "Lessons from this incident"; lessons.append(lessonsTitle);
+      data.decisions.forEach((decision) => {
+        const row = document.createElement("p"); row.className = "call-log";
+        row.textContent = `Declined ${decision.action}. Reason: ${decision.reason || "none given"}. ${decision.resolution ? `What fixed it: ${decision.resolution}` : "Not yet resolved."}`;
+        lessons.append(row);
+      });
+      root.append(lessons);
+    }
+    const consulted = data.timeline.filter((event) => event.action === "past_decisions_consulted");
+    if (consulted.length) {
+      const note = document.createElement("p"); note.className = "call-log";
+      note.textContent = `Consulted earlier decisions: ${consulted.map((event) => { const d = parse(event.detail); return `#${d.decisionIds.join(", #")}${d.lessonApplied ? ` — ${d.lessonApplied}` : ""}`; }).join(" · ")}`;
+      root.append(note);
+    }
     if (data.retrospective) {
       const note = document.createElement("p"); note.className = "call-log"; note.textContent = `${data.retrospective.summary} Follow-up: ${data.retrospective.unresolved_work}`; root.append(note);
     }
@@ -197,7 +219,11 @@
       const confirm = document.createElement("p"); confirm.className = "call-log";
       confirm.textContent = `Pending action: ${action.action} in ${action.target_environment}; expires ${date(action.expires_at)}. Approval runs fresh dependency probes before changing the flag.`;
       const approve = button(`Approve and execute action ${action.id}`, async () => runAction(`/dashboard-api/incidents/${incident.id}/actions/${action.id}/approve`, {}), "primary");
-      const decline = button(`Decline action ${action.id}`, async () => runAction(`/dashboard-api/incidents/${incident.id}/actions/${action.id}/decline`, {}), "danger");
+      const decline = button(`Decline action ${action.id}`, async () => {
+        const reason = prompt("Why decline this action? Your reason is kept and shown to the investigator on later incidents.");
+        if (reason === null) return;
+        await runAction(`/dashboard-api/incidents/${incident.id}/actions/${action.id}/decline`, { reason });
+      }, "danger");
       actions.append(approve, decline); root.insertBefore(confirm, timelineSection);
     });
     $("detail").replaceChildren(root);

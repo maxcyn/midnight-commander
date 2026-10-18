@@ -30,14 +30,16 @@ Recommendations enabled	Checkout calls the recommendation dependency
 Recommendation fault	Dependency exceeds its timeout
 Payment fault	Simulated payment fails
 Reset	Returns the test environment to a known state
+Provider degradation	Primary payment provider slows and saturates the connection pool it shares with the recommendation client, so recommendation lookups time out too
 
 
-Intentionally let a recommendation timeout break checkout. The available mitigation is disabling recommendations.
-Build one authenticated action endpoint that sets the feature flag to false; avoid a “toggle” operation, which could reverse the action if retried.
+Intentionally let a recommendation timeout break checkout. Two mitigations exist: disabling recommendations (fixes a genuine recommendation outage) and switching to the backup payment provider (fixes provider degradation).
+Build authenticated action endpoints that set an explicit target state: recommendations flag to false, payment provider to backup. Avoid “toggle” operations, which could reverse the action if retried.
+Provider degradation is the hidden root cause for the learning demo: the visible errors are recommendation timeouts, and the recommendation probe also times out because of the shared pool. Disabling recommendations does not restore checkout in this case, because the payment path is still degraded. The only independent clue is an elevated payment latency reading on the read-only payment probe.
 Run synthetic requests continuously, keeping request timestamps, outcomes, and latency.
 Important correction: if recommendations fail before payment is reached, missing payment errors do not prove payments are healthy. Use an independent dependency probe if the agent needs that evidence.
 Keep the responder backend separate from the faulty application. Fault-injection settings are visible to the test runner, not the investigating agent.
-Done when: recommendations can break checkout, disabling them restores checkout, and the same action does not repair a payment failure.
+Done when: recommendations can break checkout, disabling them restores checkout, the same action does not repair a payment failure, and switching providers restores checkout under provider degradation where disabling recommendations does not.
 Stage 2 — Add real Sentry observability
 Instrument actual requests and failures rather than uploading fabricated incident summaries.
 Signal	Implementation	Purpose
@@ -61,6 +63,7 @@ Evidence	Source, observation time, content/reference
 Timeline event	Actor, action, timestamp, result
 Proposed action	Exact target, parameters, expiry, approval state
 Runbook version	Conditions, operation, verification, evaluation results
+Decision feedback	Incident, action, approve or decline, engineer's stated reason, the diagnosis the system gave, and what actually fixed it
 
 
 Start with a manually configured owner and backup. A complete rotation calendar is unnecessary.
@@ -78,6 +81,7 @@ Give CREAO narrowly defined tools:
 - Read legitimate feature configuration and recent changes.
 - Run read-only dependency probes.
 - Retrieve candidate runbooks.
+- Retrieve past engineer decisions, including declined actions with their reasons, for the same service and similar evidence.
 - Submit a structured investigation result.
 The result should contain:
 - Observed impact and its measurement source.
@@ -87,7 +91,8 @@ The result should contain:
 - Applicable runbook, if any.
 - Proposed action and expected tradeoff.
 Avoid displaying invented probabilities such as “97% confident.” Use evidence-backed descriptions such as supported, inconclusive, or contradicted.
-The backend—not an LLM confidence score—checks whether an action is permitted.
+The result also states which past decisions it consulted and how they changed the proposal.
+The backend—not an LLM confidence score—checks whether an action is permitted. The allowlist now holds two actions, each tied to the cause it addresses. A past decline informs the proposal but never grants permission, and a lesson cannot add an action to the allowlist.
 Finding	Response
 Relevant failure evidence, but no authorised runbook	Request an engineer’s decision
 Tested, authorised runbook with satisfied conditions	Permit its bounded operation
@@ -96,7 +101,8 @@ Investigation exceeds its time budget	Contact the engineer with what is known
 
 
 For urgent incidents, notification must not wait indefinitely for diagnosis. The call can say that investigation is ongoing.
-Done when: CREAO distinguishes recommendation failure from payment failure without seeing the injected scenario label.
+Done when: CREAO distinguishes recommendation failure from payment failure without seeing the injected scenario label, and a stored decline measurably changes its next proposal for matching evidence.
+Risk to test early: on a first provider-degradation incident the agent may find the payment latency clue unaided and propose the right action. The “wrong first” incident depends on the evidence genuinely pointing at recommendations, so run it before building the rest and adjust what the probe exposes if needed. Do not script a wrong answer.
 Stage 5 — Add the Photon phone interaction
 Use Photon 2.0 + ElevenLabs, following the documented SIP integration. ElevenLabs handles the spoken conversation; Photon connects it to the phone network. photon.codes
 Prepare a short briefing before calling:
@@ -112,6 +118,7 @@ Spoken request	Backend operation
 
 
 Keep CREAO as the investigator; the voice agent speaks from the same incident record.
+Declining is a first-class outcome. The voice agent asks why and records the engineer's reason against the exact action, and “I’ll fix it myself” records what they did.
 Record call outcomes separately: initiated, answered, acknowledged, approved, failed, or unanswered. Answering a call is not approval. Bind any approval to the exact action, incident, authorised responder, and expiry. For the demo, use an enrolled participant and a simple verification step before accepting an operational approval.
 If unanswered, follow a bounded retry policy and notify the configured backup. Do not repeatedly call for every error event.
 Done when: the engineer can understand, approve or decline, and obtain status without opening Slack.
@@ -122,7 +129,7 @@ The backend performs the action only after checking:
 - Fresh applicability evidence.
 - Exact target environment.
 - Whether the operation already executed.
-Record the previous flag value and action result. Allow only one active mutation per incident.
+Record the previous flag or provider value and the action result. Allow only one active mutation per incident. The switch-provider action has its own applicability checks: elevated payment latency is confirmed now, the primary provider is still selected, and the backup is reachable.
 Verification combines:
 1. Synthetic checkout results.
 2. Correct order-confirmation behaviour.
@@ -139,6 +146,7 @@ After a verified human-guided intervention, CREAO proposes a structured procedur
 - Actual execution.
 - Recovery observations.
 - Relevant environment and release context.
+- Declined proposals and the engineer's stated reasons, and what the engineer did instead.
 Its output includes preconditions, disqualifying conditions, the allowed action, verification rules, and escalation behaviour.
 Store it as versioned structured data; generate readable Markdown for explanation. This is workflow learning, not RLHF.
 Use a lifecycle:
@@ -153,8 +161,11 @@ Both dependencies failing	Do not claim full recovery; escalate unresolved failur
 Missing or stale evidence	Abstain
 Feature already disabled	Recognise no further mitigation from the same action
 Action rejected or ineffective	Record failure and escalate
+Provider degradation with recommendation timeouts	Reject the disable-recommendations procedure; select the provider switch
+Past decline for the same evidence pattern	Do not re-propose the declined action
 
 
+A learned lesson is also versioned and evaluated before it influences proposals. It must not suppress the correct action for a genuine recommendation outage, so the recommendation-timeout case is re-run against it. Lessons can be suspended like runbooks.
 Use isolated test instances and credentials. Evaluation events must not trigger live paging.
 Keep fixed tests and held-out variations that the generating agent cannot rewrite. Otherwise the system could produce a procedure and conveniently weak tests for itself.
 Done when: the dashboard shows a generated runbook, its evidence, and measured pass/fail results—including refusal cases.
@@ -164,31 +175,30 @@ Borrow the useful coordination features without building a full Rootly replaceme
 - Evidence panel: linked logs, traces, competing explanations.
 - Timeline: alerts, investigation, calls, approval, action, verification.
 - Runbook panel: version, scope, authorisation, evaluation results.
+- Lessons panel: declined actions, the stated reason, and which later proposals consulted them.
 - Retrospective: what happened, what restored service, unresolved work.
 Generate a follow-up item for the permanent fix—for example, making checkout tolerate recommendation outages.
 Label the outcome accurately: “Checkout recovered; recommendations remain disabled.” This is mitigation, not a repaired recommendation service.
 Log your own agent/tool failures in Sentry too. Show at least one genuine example of observability helping you improve the hack itself, such as a duplicate webhook causing duplicate work that you diagnosed and fixed.
 Done when: a reviewer can reconstruct why the system acted and what remains broken.
 Stage 9 — Validate and present the complete story
-Use this demo sequence:
-Scene	What it proves
+The demo is one scenario run twice: the same masked provider degradation, before and after the system has learned from a refusal.
+Step	What it shows
 Healthy baseline	The app genuinely works before injection
-First recommendation incident	Real Sentry evidence drives investigation
-Phone decision	The engineer responds without opening Slack
-Mitigation and verification	A tool changes the app and recovery is measured
-Runbook generation and evaluation	The intervention becomes a tested procedure
-Matching recurrence	Pre-authorised automation works
-Payment counterexample	Similar symptoms do not trigger the wrong procedure
-
+Incident 1	Real Sentry evidence points at recommendation timeouts; with no lesson, the system proposes disabling recommendations
+Engineer declines	The engineer refuses by phone and says why (payment provider degradation, shared pool); the reason is stored against the action
+Engineer fixes it	The engineer handles it, and the system records what was done
+Incident 2	The same masked pattern returns; the system consults the stored decline, proposes the provider switch, and does not re-propose the declined action
+Approval and verification	The engineer approves, the backend switches providers, and recovery is measured
+Show the two incidents side by side: the first proposal was wrong and was refused, the second was right because of that refusal.
 
 Measure:
-- Alert-to-acknowledgement time.
-- Alert-to-verified-recovery time.
-- Number of human decisions.
-- Correct runbook selections and refusals.
-- Unnecessary actions.
-- Duplicate alerts suppressed.
+- Wrong proposals in incident 1 versus incident 2.
+- Time from alert to a correct proposal.
+- Whether the lesson was consulted, and which decline it came from.
+- Alert-to-verified-recovery time for incident 2.
+- Unnecessary actions (expected: none, since the declined action never ran).
 Label all results as controlled demo measurements.
-Scope priority: finish the real failure → Sentry → CREAO → phone approval → verified recovery path first. Then finish runbook generation and evaluation. Add dashboard polish last.
+Scope priority: finish the real failure → Sentry → CREAO → phone approval → verified recovery path first. Then the decline-feedback loop and the second action, since the demo depends on them. Runbook generation and evaluation are optional for this demo. Add dashboard polish last.
 Defer full scheduling, multi-party conference calls, automatic code deployment, broad infrastructure actions, and multi-channel support.
-Final positioning: SecondShift combines familiar incident-management essentials with a focused experiment: can a human intervention become a tested, narrowly authorised automation, while unresolved cases reach the engineer through an actionable phone conversation? That is the claim your implementation and demo should prove.
+Final positioning: SecondShift combines familiar incident-management essentials with a focused experiment: can a human intervention, including a refusal, become a tested, narrowly authorised automation, while unresolved cases reach the engineer through an actionable phone conversation? That is the claim your implementation and demo should prove.

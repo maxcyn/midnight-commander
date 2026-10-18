@@ -13,9 +13,10 @@ const PROPOSAL_TTL_MS = 10 * 60_000;
 // The backend, not the model, owns this list. Each action names the cause it can address.
 const ALLOWED_ACTIONS: Record<string, { addresses: string; parameters: Record<string, unknown> }> = {
   disable_recommendations: { addresses: "recommendations_timeout", parameters: { flag: "recommendations", value: false } },
+  switch_payment_provider: { addresses: "payment_provider_degradation", parameters: { provider: "backup" } },
 };
 
-const CAUSES = ["recommendations_timeout", "payment_failure", "other", "unknown"];
+const CAUSES = ["recommendations_timeout", "payment_failure", "payment_provider_degradation", "other", "unknown"];
 const STATUSES = ["supported", "inconclusive", "contradicted"];
 const RECOMMENDATIONS = ["request_engineer_decision", "permit_runbook", "escalate_without_action"] as const;
 type Recommendation = (typeof RECOMMENDATIONS)[number];
@@ -24,11 +25,17 @@ export interface InvestigationResult {
   incident_id: number | string;
   impact: { summary: string; measured_from: string[] };
   hypotheses: { cause: string; status: string; supporting_evidence?: any[]; conflicting_evidence?: any[] }[];
+  // Blocking: facts that would change or prevent the proposal. Any entry escalates without an action.
   missing_information: string[];
+  // Not blocking: gaps that do not bear on the proposal (for example a deeper root cause). Recorded and shown, never hidden.
+  non_blocking_unknowns?: string[];
   applicable_runbook: { id: string; version: number | string; preconditions_met: boolean } | null;
   proposed_action: { action: string; target_environment: string; expected_tradeoff?: string } | null;
   recommendation: Recommendation;
   call_briefing: string;
+  // Ids from /tools/past_decisions the agent actually read, and how they changed its proposal.
+  consulted_decisions?: number[];
+  lesson_applied?: string;
 }
 
 // Hand-rolled so a malformed agent answer is rejected with specific reasons rather than trusted.
@@ -56,12 +63,20 @@ export function validateResult(x: any): { ok: true; value: InvestigationResult }
     }
   });
   if (!Array.isArray(x.missing_information) || x.missing_information.some((item: unknown) => typeof item !== "string")) errors.push("missing_information must be an array of strings");
+  if (x.non_blocking_unknowns !== undefined &&
+      (!Array.isArray(x.non_blocking_unknowns) || x.non_blocking_unknowns.some((item: unknown) => typeof item !== "string"))) {
+    errors.push("non_blocking_unknowns must be an array of strings");
+  }
   if (!RECOMMENDATIONS.includes(x.recommendation)) errors.push(`recommendation must be one of ${RECOMMENDATIONS.join("|")}`);
   if (typeof x.call_briefing !== "string" || !x.call_briefing.trim()) errors.push("call_briefing missing");
   if (x.applicable_runbook !== null && x.applicable_runbook !== undefined &&
       (typeof x.applicable_runbook.id !== "string" || !Number.isFinite(Number(x.applicable_runbook.version)) ||
        typeof x.applicable_runbook.preconditions_met !== "boolean")) {
     errors.push("applicable_runbook must include id, numeric version, and preconditions_met");
+  }
+  if (x.consulted_decisions !== undefined &&
+      (!Array.isArray(x.consulted_decisions) || x.consulted_decisions.some((id: unknown) => !Number.isInteger(id)))) {
+    errors.push("consulted_decisions must be an array of decision ids from past_decisions");
   }
   if (x.proposed_action != null &&
       (typeof x.proposed_action.action !== "string" || typeof x.proposed_action.target_environment !== "string" ||
@@ -222,7 +237,15 @@ export function submitInvestigation(raw: unknown, backendVerifiedRunbook = false
   }
   addTimeline(incidentId, "creao", "investigation_submitted", {
     hypotheses: r.hypotheses.map((h) => `${h.cause}:${h.status}`), recommendation: r.recommendation, missing: r.missing_information,
+    nonBlockingUnknowns: r.non_blocking_unknowns ?? [],
   });
+
+  // Record which earlier decisions informed this proposal. Only ids that exist for this service count.
+  const consulted = (r.consulted_decisions ?? []).filter((id) => db.prepare(
+    `SELECT 1 FROM decision_feedback WHERE id = ? AND service = ? AND incident_id != ?`).get(id, inc.service, incidentId));
+  if (consulted.length) {
+    addTimeline(incidentId, "creao", "past_decisions_consulted", { decisionIds: consulted, lessonApplied: r.lesson_applied ?? null });
+  }
 
   if (late) {
     addTimeline(incidentId, "system", "late_submission_recorded", { incidentStatus: inc.status }, "ignored_for_state");

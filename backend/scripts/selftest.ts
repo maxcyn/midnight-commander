@@ -2,7 +2,7 @@ import { spawnSync } from "node:child_process";
 import { resolve } from "node:path";
 
 const runner = resolve("node_modules/tsx/dist/cli.mjs");
-for (const testFile of ["src/selftest.ts", "src/selftest-policy.ts", "src/selftest-voice.ts"]) {
+for (const testFile of ["src/selftest.ts", "src/selftest-policy.ts", "src/selftest-voice.ts", "src/selftest-workflows.ts"]) {
   const result = spawnSync(process.execPath, [runner, testFile], {
     env: { ...process.env, DB_PATH: ":memory:" },
     stdio: "inherit",

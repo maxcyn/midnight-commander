@@ -151,6 +151,23 @@ CREATE TABLE IF NOT EXISTS phone_calls (
   outcome TEXT
 );
 
+-- What an engineer decided about a proposal, why, and what fixed things in the end. Read back by the
+-- investigator on later incidents. It informs proposals; it never grants permission to act.
+CREATE TABLE IF NOT EXISTS decision_feedback (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  incident_id INTEGER NOT NULL REFERENCES incidents(id),
+  proposed_action_id INTEGER NOT NULL UNIQUE REFERENCES proposed_actions(id),
+  service TEXT NOT NULL,
+  environment TEXT NOT NULL,
+  action TEXT NOT NULL,
+  decision TEXT NOT NULL,                -- declined
+  reason TEXT,                           -- the engineer's own words
+  responder TEXT NOT NULL,
+  diagnosis TEXT,                        -- JSON: what the system believed when it proposed this
+  resolution TEXT,                       -- what actually restored service, filled in later
+  decided_at TEXT NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS retrospectives (
   incident_id INTEGER PRIMARY KEY REFERENCES incidents(id),
   summary TEXT NOT NULL,

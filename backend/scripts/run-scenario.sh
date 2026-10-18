@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Usage: scripts/run-scenario.sh recommendation|payment
+# Usage: scripts/run-scenario.sh recommendation|payment|provider
 # Breaks the demo app, opens an incident, waits for the CREAO investigation, prints the outcome.
 set -euo pipefail
 cd "$(dirname "$0")/.."
@@ -9,7 +9,8 @@ scenario="${1:-}"
 case "$scenario" in
   recommendation) faults='{"recommendation":true,"payment":false}';;
   payment)        faults='{"recommendation":false,"payment":true}';;
-  *) echo "usage: $0 recommendation|payment"; exit 1;;
+  provider)       faults='{"recommendation":false,"payment":false,"providerDegradation":true}';;
+  *) echo "usage: $0 recommendation|payment|provider"; exit 1;;
 esac
 debug=(-H "Authorization: Bearer ${DEBUG_TOKEN}" -H 'content-type: application/json')
 dashboard=(-H "Authorization: Bearer ${DASHBOARD_TOKEN}" -H "X-Responder: ${PRIMARY_RESPONDER:-primary-engineer}")
