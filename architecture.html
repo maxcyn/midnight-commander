@@ -274,16 +274,16 @@
   }
 
   h3 {
-    font-size: 15.5px;
+    font-size: 16.5px;
     font-weight: 700;
     line-height: 1.25;
     color: var(--ink);
-    margin-bottom: 5px;
+    margin-bottom: 8px;
   }
 
   p, li {
-    font-size: clamp(13.5px, 1.15vw, 15.5px);
-    line-height: 1.45;
+    font-size: clamp(14.5px, 1.2vw, 16.5px);
+    line-height: 1.5;
     color: var(--ink-secondary);
   }
 
@@ -358,7 +358,7 @@
     counter-reset: item;
     display: flex;
     flex-direction: column;
-    gap: 8px;
+    gap: 12px;
   }
 
   .sg-list li {
@@ -371,9 +371,9 @@
     content: counter(item, decimal-leading-zero);
     position: absolute;
     left: 0;
-    top: 2px;
+    top: 3px;
     font-family: "IBM Plex Mono", ui-monospace, monospace;
-    font-size: 11.5px;
+    font-size: 12px;
     font-weight: 600;
     color: var(--primary);
   }
@@ -516,14 +516,14 @@
   }
 
   .pipe-title {
-    font-size: 15px;
+    font-size: 16px;
     font-weight: 700;
     color: var(--ink);
   }
 
   .pipe-body {
-    font-size: 12.8px;
-    line-height: 1.38;
+    font-size: 13.5px;
+    line-height: 1.42;
     color: var(--ink-secondary);
   }
 
@@ -548,11 +548,11 @@
   .loop-card {
     background: var(--surface);
     border: 1px solid var(--rule-light);
-    padding: 11px 14px;
+    padding: 12px 15px;
     display: flex;
     flex-direction: column;
     justify-content: center;
-    gap: 4px;
+    gap: 5px;
     min-width: 0;
   }
 
@@ -574,8 +574,8 @@
   }
 
   .loop-card p {
-    font-size: 12.8px;
-    line-height: 1.36;
+    font-size: 13.5px;
+    line-height: 1.4;
     color: var(--ink-secondary);
   }
 
@@ -586,7 +586,7 @@
     width: 100%;
     table-layout: fixed;
     border-collapse: collapse;
-    font-size: 12.5px;
+    font-size: 13.5px;
   }
 
   .sg-table th {
@@ -595,18 +595,18 @@
     font-weight: 600;
     color: var(--primary);
     text-align: left;
-    padding: 6px 8px;
+    padding: 8px 10px;
     border-top: 1px solid var(--rule-heavy);
     border-bottom: 1px solid var(--rule-light);
     background: var(--surface);
   }
 
   .sg-table td {
-    padding: 7px 8px;
+    padding: 10px 10px;
     border-bottom: 1px solid var(--rule-light);
     color: var(--ink-secondary);
     vertical-align: top;
-    line-height: 1.35;
+    line-height: 1.4;
     overflow-wrap: break-word;
   }
 
@@ -657,10 +657,11 @@
   }
 
   .metric-row {
-    display: flex;
-    align-items: baseline;
-    gap: 18px;
-    padding: 10px 0;
+    display: grid;
+    grid-template-columns: 120px minmax(0, 1fr);
+    align-items: center;
+    gap: 16px;
+    padding: 14px 0;
     border-top: 1px solid var(--rule-light);
   }
 
@@ -669,10 +670,10 @@
   }
 
   .metric-fig {
-    flex: 0 0 110px;
-    text-align: right;
+    text-align: left;
+    white-space: nowrap;
     font-family: "IBM Plex Mono", ui-monospace, monospace;
-    font-size: clamp(26px, 2.5vw, 34px);
+    font-size: clamp(24px, 2.3vw, 32px);
     font-weight: 700;
     line-height: 1;
     color: var(--accent);
@@ -680,18 +681,22 @@
   }
 
   .metric-desc {
-    flex: 1 1 auto;
     min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
   }
 
   .metric-desc strong {
     display: block;
-    font-size: 14.5px;
+    font-size: 15px;
+    line-height: 1.25;
     color: var(--ink);
   }
 
   .metric-desc span {
-    font-size: 13px;
+    font-size: 13.5px;
+    line-height: 1.35;
     color: var(--ink-secondary);
   }
 
@@ -763,7 +768,7 @@
   <!-- Top Running Header -->
   <header class="deck-topbar">
     <div class="deck-topbar-left">
-      <span><span class="status-dot"></span>secondshift // arch-spec (implemented)</span>
+      <span><span class="status-dot"></span>secondshift</span>
       <span>repo: maxcyn/midnight-commander</span>
     </div>
     <div class="deck-controls">
@@ -780,41 +785,41 @@
     <!-- ====================================================================
          SLIDE 01: COVER SHEET
          ==================================================================== -->
-    <section class="slide active" data-title="Cover — SecondShift" data-sub="Plug-and-play incident investigator, voice responder & unified learning loop">
+    <section class="slide active" data-title="Cover — SecondShift" data-sub="Plug-and-play AI on-call investigator, voice responder & learning loop">
       <div class="cover-wrap">
         <div class="cover-meta">
-          <span>system architecture specification // midnight commander</span>
-          <span>service-manifest.json + sentry + creao + photon sip + elevenlabs</span>
+          <span>system architecture // midnight commander</span>
+          <span>sentry + creao + photon + elevenlabs</span>
         </div>
 
         <div class="cover-hero">
-          <p class="kicker" style="margin-bottom: 10px;">00 // implemented architecture</p>
+          <p class="kicker" style="margin-bottom: 10px;">00 // overview</p>
           <h1>SecondShift</h1>
           <p class="cover-deck">
-            A manifest-driven on-call agent that correlates live Sentry telemetry and independent dependency probes with unified incident memory, enforces a two-layer deterministic policy gate, and phones the responder via Photon + ElevenLabs—turning every approved fix or refusal into verified operational memory.
+            A plug-and-play AI on-call responder for any software service—investigates alerts, checks live health, calls your engineer with a safe fix, and learns from every outage.
           </p>
         </div>
 
         <div class="cover-specs">
           <div class="spec-cell">
-            <span class="spec-id">01 // declarative contract</span>
-            <span class="spec-title">service-manifest.json</span>
-            <span class="spec-desc">Plug-and-play definition of dependencies, read-only probes, causes, and idempotent actions.</span>
+            <span class="spec-id">01 // plug &amp; play</span>
+            <span class="spec-title">Service Manifest</span>
+            <span class="spec-desc">Describe any app's health checks and safe fixes in one JSON file.</span>
           </div>
           <div class="spec-cell">
-            <span class="spec-id">02 // single investigator</span>
-            <span class="spec-title">CREAO + 6 HTTP Tools</span>
-            <span class="spec-desc">Pulls Sentry spans/logs, live probes, config, and <code>past_decisions</code> to submit one grounded proposal.</span>
+            <span class="spec-id">02 // investigate</span>
+            <span class="spec-title">CREAO Agent</span>
+            <span class="spec-desc">Diagnoses alerts using your logs, live probes, and past incidents.</span>
           </div>
           <div class="spec-cell">
-            <span class="spec-id">03 // voice &amp; auto-runbook</span>
-            <span class="spec-title">Photon SIP + ElevenLabs</span>
-            <span class="spec-desc">Auto-provisioned voice tools for approval/refusal, or zero-touch execution for <code>authorised</code> runbooks.</span>
+            <span class="spec-id">03 // decide</span>
+            <span class="spec-title">Voice or Auto-Fix</span>
+            <span class="spec-desc">Calls your on-call engineer or runs a pre-approved runbook.</span>
           </div>
           <div class="spec-cell">
-            <span class="spec-id">04 // unified learning loop</span>
-            <span class="spec-title">DB + incidents.md + Runbooks</span>
-            <span class="spec-desc">Auto-snapshots decline evidence, watches `/config` for manual fixes, verifies recovery, and syncs `incidents.md`.</span>
+            <span class="spec-id">04 // memory</span>
+            <span class="spec-title">Learning Loop</span>
+            <span class="spec-desc">Verifies real recovery and learns from every fix across your team.</span>
           </div>
         </div>
       </div>
@@ -822,15 +827,14 @@
 
     <!-- ====================================================================
          SLIDE 02: END-TO-END PIPELINE & UNIFIED LEARNING LOOP
-         Matches actual implementation (single CREAO investigator + unified memory)
          ==================================================================== -->
-    <section class="slide" data-title="End-to-End Pipeline" data-sub="Five forward execution stages + stage 06 unified learning loop">
+    <section class="slide" data-title="End-to-End Flow" data-sub="How SecondShift runs across any service from alert to memory">
       <div class="slide-head">
         <div class="slide-head-main">
-          <span class="kicker">01 // system topology</span>
-          <h2>End-to-end incident pipeline &amp; unified learning loop</h2>
+          <span class="kicker">01 // system flow</span>
+          <h2>One pipeline that adapts to any service</h2>
         </div>
-        <span class="slide-sub">manifest-driven flow from sentry webhook to verified recovery</span>
+        <span class="slide-sub">5 steps forward &middot; 1 learning loop back</span>
       </div>
 
       <!-- Top Tier: Stages 01 to 05 -->
@@ -838,240 +842,231 @@
         <div class="pipe-step">
           <div class="pipe-step-head">
             <span class="pipe-num">01 // detect</span>
-            <span class="pipe-actor">sentry webhook</span>
+            <span class="pipe-actor">sentry</span>
           </div>
-          <div class="pipe-title">Alert Intake</div>
-          <p class="pipe-body">Verifies HMAC-SHA256 on raw bytes, deduplicates retries in <code>webhook_events</code>, and opens or attaches to one active incident.</p>
-          <div class="pipe-io">out &rarr; incident_id + run_id</div>
+          <div class="pipe-title">Catch Alert</div>
+          <p class="pipe-body">Opens one incident when your service throws production errors.</p>
+          <div class="pipe-io">alert &rarr; incident</div>
         </div>
 
         <div class="pipe-step step-accent">
           <div class="pipe-step-head">
             <span class="pipe-num">02 // investigate</span>
-            <span class="pipe-actor">creao agent</span>
+            <span class="pipe-actor">creao</span>
           </div>
-          <div class="pipe-title">Gather &amp; Diagnose</div>
-          <p class="pipe-body">Single CREAO run calls <code>service_manifest</code>, <code>sentry_evidence</code>, <code>feature_config</code>, both <code>probe</code>s, and <code>past_decisions</code>.</p>
-          <div class="pipe-io">post &rarr; submit_investigation</div>
+          <div class="pipe-title">Diagnose</div>
+          <p class="pipe-body">Checks error logs, live dependency probes, and past incidents.</p>
+          <div class="pipe-io">evidence &rarr; proposal</div>
         </div>
 
         <div class="pipe-step step-accent">
           <div class="pipe-step-head">
             <span class="pipe-num">03 // gate</span>
-            <span class="pipe-actor">investigation.ts</span>
+            <span class="pipe-actor">backend</span>
           </div>
-          <div class="pipe-title">Policy Validation</div>
-          <p class="pipe-body">Checks <code>source_id</code> freshness (&lt;15m), 1 independent <code>supported</code> cause, and manifest allowlist. Routes to runbook or phone.</p>
-          <div class="pipe-io">out &rarr; proposed_actions</div>
+          <div class="pipe-title">Safety Check</div>
+          <p class="pipe-body">Verifies fresh evidence and checks your manifest's allowlist.</p>
+          <div class="pipe-io">policy check</div>
         </div>
 
         <div class="pipe-step">
           <div class="pipe-step-head">
             <span class="pipe-num">04 // decide</span>
-            <span class="pipe-actor">photon + 11labs</span>
+            <span class="pipe-actor">phone / auto</span>
           </div>
-          <div class="pipe-title">Voice or Auto-Run</div>
-          <p class="pipe-body">If <code>permit_runbook</code> is <code>authorised</code>, executes directly; else calls SWE to <code>approve_action</code> or <code>decline_action</code>.</p>
-          <div class="pipe-io">out &rarr; approved | declined</div>
+          <div class="pipe-title">Approve or Run</div>
+          <p class="pipe-body">Calls your engineer—or runs a pre-approved runbook directly.</p>
+          <div class="pipe-io">human or auto</div>
         </div>
 
         <div class="pipe-step step-verify">
           <div class="pipe-step-head">
             <span class="pipe-num">05 // verify</span>
-            <span class="pipe-actor">workflows.ts</span>
+            <span class="pipe-actor">backend</span>
           </div>
-          <div class="pipe-title">Fresh Check &amp; Prove</div>
-          <p class="pipe-body">Re-runs live probes (<code>checkApplicability</code>), executes 1 mutation (or watches manual fix), and polls Stage 6 recovery.</p>
-          <div class="pipe-io">out &rarr; recovered | escalated</div>
+          <div class="pipe-title">Prove Recovery</div>
+          <p class="pipe-body">Applies the fix and confirms live traffic is healthy again.</p>
+          <div class="pipe-io">verified recovery</div>
         </div>
       </div>
 
-      <!-- Middle Connector SVG: Precision-aligned with 5-col top grid and 3-col bottom grid -->
-      <svg width="100%" height="42" viewBox="0 0 1200 42" preserveAspectRatio="none" role="img" aria-label="Feedback loop from stage 05 to stage 06, into unified memory, and back to stage 02" style="flex-shrink: 0;">
-        <!-- 05 Verify (x=1090) straight down into 06 Close the loop -->
+      <!-- Middle Connector SVG -->
+      <svg width="100%" height="42" viewBox="0 0 1200 42" preserveAspectRatio="none" role="img" aria-label="Feedback loop from stage 05 to stage 06, into incident memory, and back to stage 02" style="flex-shrink: 0;">
         <line x1="1090" y1="2" x2="1090" y2="34" stroke="var(--accent)" stroke-width="2" />
         <polygon points="1085,31 1090,40 1095,31" fill="var(--accent)" />
-        <text x="1074" y="24" text-anchor="end" font-family="IBM Plex Mono, monospace" font-size="11" fill="var(--accent)">verified / declined &darr;</text>
+        <text x="1074" y="24" text-anchor="end" font-family="IBM Plex Mono, monospace" font-size="11" fill="var(--accent)">outcome &darr;</text>
 
-        <!-- 06 Close the loop (x=830) through unified memory (x=600) up into 02 Investigate (x=348) -->
         <path d="M 830 38 L 830 21 L 348 21 L 348 8" fill="none" stroke="var(--primary)" stroke-width="2" stroke-dasharray="6 4" />
         <circle cx="600" cy="21" r="4" fill="var(--primary)" />
         <polygon points="343,11 348,2 353,11" fill="var(--primary)" />
-        <rect x="395" y="10" width="380" height="20" fill="var(--bg)" />
-        <text x="585" y="24" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="11" fill="var(--primary)">&larr; syncs decision_feedback + incidents.md + runbooks</text>
+        <rect x="420" y="10" width="330" height="20" fill="var(--bg)" />
+        <text x="585" y="24" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="11" fill="var(--primary)">&larr; feeds into next investigation</text>
       </svg>
 
-      <!-- Bottom Tier: Manifest + Unified Memory + Stage 06 Close the Loop (Guaranteed inside 12-col grid) -->
+      <!-- Bottom Tier: Manifest + Memory + Stage 06 -->
       <div class="feedback-band">
         <div class="loop-card col-4">
           <div class="loop-card-head">
             <span>config // service-manifest.json</span>
-            <span class="badge-mono badge-neutral">plug-and-play</span>
+            <span class="badge-mono badge-neutral">bring your own app</span>
           </div>
-          <p>Single source of truth for dependencies, probe thresholds, allowed actions, and ElevenLabs voice provisioning.</p>
+          <p>Adapts the entire pipeline to any service with zero code changes.</p>
         </div>
 
         <div class="loop-card col-4">
           <div class="loop-card-head">
-            <span>memory // past_decisions store</span>
-            <span class="badge-mono badge-neutral">sqlite + markdown</span>
+            <span>memory // past incidents</span>
+            <span class="badge-mono badge-neutral">db + markdown</span>
           </div>
-          <p>Unifies <code>decision_feedback</code> (with raw <code>evidence_snapshot</code>), auto-rendered <code>incidents.md</code>, and versioned <code>runbooks</code>.</p>
+          <p>Stores past decisions, health snapshots, and runbooks for your service.</p>
         </div>
 
         <div class="loop-card loop-highlight col-4">
           <div class="loop-card-head">
             <span>06 // close the loop</span>
-            <span class="badge-mono badge-ok">auto-synced</span>
+            <span class="badge-mono badge-ok">auto-updated</span>
           </div>
-          <p>Snapshots decline evidence, polls <code>/config</code> via <code>watchForEngineerFix</code>, verifies manual fixes, and syncs <code>incidents.md</code>.</p>
+          <p>Records what worked—including when engineers fix an outage manually.</p>
         </div>
       </div>
 
       <div class="callout-bar">
-        <span><strong>Architectural contract:</strong> One CREAO investigator reads tools and proposes; backend deterministically gates and executes; SQLite + <code>incidents.md</code> close the loop automatically.</span>
-        <span class="tag-mono">180s investigation budget · 10m proposal ttl</span>
+        <span><strong>Core rule:</strong> You declare the manifest; AI investigates; backend enforces guardrails; every recovery builds memory.</span>
+        <span class="tag-mono">3m investigation limit &middot; 10m approval window</span>
       </div>
     </section>
 
     <!-- ====================================================================
-         SLIDE 03: MANIFEST-DRIVEN INVESTIGATION & MASKED FAULT DISAMBIGUATION
+         SLIDE 03: PLUG-AND-PLAY ONBOARDING & DEEP DIAGNOSIS
          ==================================================================== -->
-    <section class="slide" data-title="Manifest & Investigation" data-sub="How service-manifest.json and independent probes disambiguate masked failures">
+    <section class="slide" data-title="Plug-and-Play Setup" data-sub="Onboarding any software service in 4 steps and separating symptoms from root causes">
       <div class="slide-head">
         <div class="slide-head-main">
-          <span class="kicker">02 // stages 01–02 (manifest.ts + investigation.ts)</span>
-          <h2>Manifest-driven investigation &amp; masked fault disambiguation</h2>
+          <span class="kicker">02 // onboarding &amp; investigation</span>
+          <h2>Plug-and-play for any service in 4 steps</h2>
         </div>
-        <span class="slide-sub">single creao agent · 6 read-only backend endpoints</span>
+        <span class="slide-sub">manifest-driven &middot; no custom agent code required</span>
       </div>
 
       <div class="grid-12">
         <div class="pane col-5">
           <div class="pane-label">
-            <span>plug-and-play investigator tools</span>
-            <span>bearer tool_token</span>
+            <span>how any team adopts secondshift</span>
+            <span>4-step onboarding</span>
           </div>
-          <h3>Evidence collected per incident run</h3>
-          <ul class="sg-list" style="margin-top: 8px;">
-            <li><strong><code>GET /tools/service_manifest</code>:</strong> Loads request path (<code>validation &rarr; recommendations &rarr; payment &rarr; confirmation</code>), probe paths, and allowlisted actions.</li>
-            <li><strong><code>GET /tools/sentry_evidence</code> &amp; <code>feature_config</code>:</strong> Fetches scoped errors, logs, spans, and active flags—persisting each with a verifiable <code>source_id</code>.</li>
-            <li><strong><code>GET /tools/probe?dependency=…</code>:</strong> Runs live read-only probes on <code>recommendations</code> and <code>payments</code> to expose silent downstream degradation.</li>
-            <li><strong><code>GET /tools/past_decisions</code>:</strong> Returns prior approved/declined decisions, raw <code>evidence_when_declined</code> snapshots, <code>incidents.md</code>, and <code>runbooks</code>.</li>
+          <h3>From zero to live responder</h3>
+          <ul class="sg-list" style="margin-top: 10px;">
+            <li><strong>Write <code>service-manifest.json</code>:</strong> Declare your service's dependencies, health probes, and safe fix endpoints.</li>
+            <li><strong>Attach to CREAO:</strong> Clone the investigator agent and upload your manifest file.</li>
+            <li><strong>Add API keys:</strong> Point Sentry, CREAO, Photon, and your app URLs in <code>.env</code>.</li>
+            <li><strong>Provision voice in 1 command:</strong> Run <code>npm run configure:voice</code> to auto-configure the phone agent.</li>
           </ul>
         </div>
 
         <div class="pane col-7">
           <div class="pane-label">
-            <span>shared-pool masking // why both probes are mandatory</span>
-            <span>identical sentry error &ne; identical root cause</span>
+            <span>why manifest probes beat logs alone</span>
+            <span>surface symptom &ne; root cause</span>
           </div>
-          <h3>Disambiguating the two checkout failure modes</h3>
-          <table class="sg-table" style="margin-top: 8px;">
+          <h3>How live probes diagnose any architecture</h3>
+          <table class="sg-table" style="margin-top: 10px;">
             <thead>
               <tr>
-                <th style="width: 15%;">Scenario</th>
-                <th style="width: 21%;">Sentry &amp; Rec. Probe</th>
-                <th style="width: 19%;">Payment Probe</th>
-                <th style="width: 24%;">Supported Cause</th>
-                <th style="width: 21%;">Allowed Action</th>
+                <th style="width: 24%;">Outage Type</th>
+                <th style="width: 25%;">What Logs Show</th>
+                <th style="width: 25%;">What Probes Show</th>
+                <th style="width: 26%;">Action Taken</th>
               </tr>
             </thead>
             <tbody>
               <tr>
-                <td><strong>Rec. Outage</strong></td>
-                <td><code>recommendations</code> timeout (&gt;800ms)</td>
-                <td><span class="badge-mono badge-ok">40ms healthy</span></td>
-                <td class="mono">recommendations_<wbr>timeout</td>
-                <td class="mono">disable_<wbr>recommendations</td>
+                <td><strong>Feature Down</strong></td>
+                <td>Feature A times out</td>
+                <td><span class="badge-mono badge-ok">Core APIs fast</span></td>
+                <td>Disable non-critical feature</td>
               </tr>
               <tr>
-                <td><strong>Pool Degradation</strong></td>
-                <td><code>recommendations</code> timeout (pool full)</td>
-                <td><span class="badge-mono badge-warn">1800ms (&gt;1000ms)</span></td>
-                <td class="mono">payment_provider_<wbr>degradation</td>
-                <td class="mono">switch_payment_<wbr>provider</td>
+                <td><strong>Shared Bottleneck</strong></td>
+                <td>Feature A times out</td>
+                <td><span class="badge-mono badge-warn">Provider slow</span></td>
+                <td>Fail over to backup provider</td>
               </tr>
               <tr>
-                <td><strong>Payment Down</strong></td>
-                <td><code>recommendations</code> ok (~40ms)</td>
-                <td><span class="badge-mono badge-danger">unhealthy (502)</span></td>
-                <td class="mono">payment_failure</td>
-                <td><em>escalate only</em></td>
+                <td><strong>Core Outage</strong></td>
+                <td>Hard 5xx errors</td>
+                <td><span class="badge-mono badge-danger">Core failing</span></td>
+                <td><em>Escalate to engineer</em></td>
               </tr>
             </tbody>
           </table>
 
-          <div class="pane-tinted" style="margin-top: 12px;">
+          <div class="pane-tinted" style="margin-top: 14px;">
             <div class="pane-label" style="margin-bottom: 3px;">
-              <span>agent-prompt.md invariant // independent root cause rule</span>
-              <span class="mono">missing_information vs non_blocking_unknowns</span>
+              <span>why independent probes matter</span>
+              <span class="mono">shared pools &amp; queues</span>
             </div>
-            <p style="font-size: 13px;">
-              If checkout fails at recommendations, payment code never runs—so absent payment errors prove nothing. When <code>payment_provider_degradation</code> saturates the shared pool, the agent marks <strong>only</strong> the root cause <code>supported</code> and treats the recommendation timeout as its symptom.
+            <p>
+              When services share connection pools or rate limits, a slow upstream provider makes unrelated features time out first. Probing each dependency directly stops the AI from fixing the wrong thing.
             </p>
           </div>
         </div>
       </div>
 
       <div class="callout-bar">
-        <span><strong>Deduplication &amp; idempotency:</strong> Retried Sentry deliveries are ignored via <code>webhook_events</code>; CREAO run keys include <code>incident_id + opened_at</code>.</span>
-        <span class="tag-mono">4-step onboarding via service-manifest.json</span>
+        <span><strong>Takeaway:</strong> Any service with health endpoints and safe mitigation hooks can plug into SecondShift in minutes.</span>
+        <span class="tag-mono">zero hardcoded service logic</span>
       </div>
     </section>
 
     <!-- ====================================================================
-         SLIDE 04: TWO-LAYER DETERMINISTIC GATE & VOICE INTERACTION
+         SLIDE 04: SAFETY GUARDRAILS & VOICE INTERACTION
          ==================================================================== -->
-    <section class="slide" data-title="Policy Gates & Voice Call" data-sub="Submission gate, pre-execution checkApplicability, and Photon + ElevenLabs tools">
+    <section class="slide" data-title="Safety Gates & Voice Call" data-sub="Manifest-enforced safety checks and auto-provisioned voice tools">
       <div class="slide-head">
         <div class="slide-head-main">
-          <span class="kicker">03 // stages 03–04 (investigation.ts + workflows.ts + voice.ts)</span>
-          <h2>Two-layer policy gate &amp; spoken decision loop</h2>
+          <span class="kicker">03 // guardrails &amp; voice</span>
+          <h2>Double safety checks &amp; auto-configured voice calls</h2>
         </div>
-        <span class="slide-sub">llm proposes · backend gates twice · human or runbook executes</span>
+        <span class="slide-sub">AI proposes &middot; backend checks twice &middot; human decides</span>
       </div>
 
       <div class="grid-12">
         <!-- Left: Two-Layer Gate -->
         <div class="pane col-6">
           <div class="pane-label">
-            <span>03 // two-stage backend validation</span>
-            <span>submission gate + pre-execution gate</span>
+            <span>03 // backend guardrails</span>
+            <span>AI never changes production directly</span>
           </div>
-          <h3>Deterministic checks before any mutation</h3>
-          <p style="margin-bottom: 8px;">
-            Proposals use qualitative statuses (<mark>supported</mark>, <mark>inconclusive</mark>, <mark>contradicted</mark>). The backend enforces two separate code gates:
-          </p>
+          <h3>Checked twice before any fix runs</h3>
 
-          <table class="sg-table">
+          <table class="sg-table" style="margin-top: 10px;">
             <thead>
               <tr>
-                <th style="width: 16%;">Gate</th>
-                <th style="width: 56%;">Deterministic Rule Enforced in Code</th>
-                <th style="width: 28%;">If Violated</th>
+                <th style="width: 24%;">Check</th>
+                <th style="width: 52%;">Rule</th>
+                <th style="width: 24%;">If Failed</th>
               </tr>
             </thead>
             <tbody>
               <tr>
-                <td class="mono"><strong>Gate 1</strong><br><span style="font-size:10.5px;color:var(--ink-muted)">submit</span></td>
-                <td>Every cited <code>source_id</code> exists in DB &amp; age &lt; 15m</td>
-                <td><span class="badge-mono badge-danger">HTTP 422 retry</span></td>
+                <td class="mono"><strong>1. Evidence</strong></td>
+                <td>Evidence is fresh (&lt;15m) and proves one single cause.</td>
+                <td><span class="badge-mono badge-danger">escalate</span></td>
               </tr>
               <tr>
-                <td class="mono"><strong>Gate 1</strong><br><span style="font-size:10.5px;color:var(--ink-muted)">decide()</span></td>
-                <td><code>missing_information</code> empty; 1 cause <code>supported</code>; action matches cause in manifest &amp; env=<code>demo</code></td>
-                <td><span class="badge-mono badge-danger">escalate only</span></td>
+                <td class="mono"><strong>2. Manifest</strong></td>
+                <td>Proposed fix is allowed for that cause in your manifest.</td>
+                <td><span class="badge-mono badge-danger">escalate</span></td>
               </tr>
               <tr>
-                <td class="mono"><strong>Gate 2</strong><br><span style="font-size:10.5px;color:var(--ink-muted)">execute</span></td>
-                <td><code>checkApplicability()</code> re-probes live app: blocks <code>disable_recommendations</code> if payment probe &gt;1000ms</td>
-                <td><span class="badge-mono badge-warn">blocked_by_checks</span></td>
+                <td class="mono"><strong>3. Re-probe</strong></td>
+                <td>Re-tests live dependency health right before acting.</td>
+                <td><span class="badge-mono badge-warn">blocked</span></td>
               </tr>
               <tr>
-                <td class="mono"><strong>Gate 2</strong><br><span style="font-size:10.5px;color:var(--ink-muted)">sqlite tx</span></td>
-                <td><code>BEGIN IMMEDIATE</code> checks <code>pending</code> state, 10m TTL, responder role, and 0 prior runs</td>
-                <td><span class="badge-mono badge-neutral">no-op / reject</span></td>
+                <td class="mono"><strong>4. Lock</strong></td>
+                <td>Approval is under 10m old and hasn't run yet.</td>
+                <td><span class="badge-mono badge-neutral">no-op</span></td>
               </tr>
             </tbody>
           </table>
@@ -1080,237 +1075,208 @@
         <!-- Right: Voice Call & Provisioning -->
         <div class="pane col-6">
           <div class="pane-label">
-            <span>04 // photon sip + elevenlabs (npm run configure:voice)</span>
-            <span>auto-provisioned from manifest</span>
+            <span>04 // photon + elevenlabs phone call</span>
+            <span>auto-built from your manifest</span>
           </div>
-          <h3>Voice agent tools &amp; call lifecycle</h3>
-          <p style="margin-bottom: 8px;">
-            <code>configure-elevenlabs.ts</code> patches the ElevenLabs agent with manifest actions and dynamic variables (<code>incident_id</code>, <code>call_id</code>, <code>proposed_action</code>, <code>call_briefing</code>).
-          </p>
+          <h3>Three spoken commands on the call</h3>
 
-          <table class="sg-table">
+          <table class="sg-table" style="margin-top: 10px;">
             <thead>
               <tr>
-                <th style="width: 44%;">Webhook Tool &amp; Endpoint</th>
-                <th style="width: 56%;">Backend Behaviour</th>
+                <th style="width: 36%;">Spoken Command</th>
+                <th style="width: 64%;">What Happens</th>
               </tr>
             </thead>
             <tbody>
               <tr>
-                <td class="mono"><strong>explain_evidence</strong><br>GET /voice/incidents/:id/briefing</td>
-                <td>Returns locked briefing, impact summary, hypotheses, and fresh evidence items.</td>
+                <td class="mono"><strong>Ask details</strong><br>explain_evidence</td>
+                <td>Reads out what broke and live probe timings.</td>
               </tr>
               <tr>
-                <td class="mono"><strong>approve_action</strong><br>POST /voice/incidents/:id/approve</td>
-                <td>Requires <code>confirmed=true</code> (+ optional code); runs <code>approveAndExecute()</code> &amp; starts Stage 6 verification.</td>
+                <td class="mono"><strong>Approve fix</strong><br>approve_action</td>
+                <td>Confirms with engineer, then calls your fix endpoint.</td>
               </tr>
               <tr>
-                <td class="mono"><strong>decline_action</strong><br>POST /voice/incidents/:id/decline</td>
-                <td>Records optional reason, snapshots raw probe evidence into <code>decision_feedback</code>, starts <code>watchForEngineerFix()</code>.</td>
+                <td class="mono"><strong>Decline fix</strong><br>decline_action</td>
+                <td>Cancels fix, snapshots health, and watches how the engineer fixes it.</td>
               </tr>
             </tbody>
           </table>
-
-          <p style="font-size: 12.5px; color: var(--ink-muted); margin-top: 8px;">
-            * Post-call webhook (<code>/elevenlabs-webhook</code>) tracks <code>initiated &rarr; answered / unanswered / failed</code>, retrying primary up to 2&times; before escalating to <code>backup-engineer</code>.
-          </p>
         </div>
       </div>
 
       <div class="callout-bar">
-        <span><strong>Pre-authorised fast path:</strong> When a matching runbook has lifecycle <code>authorised</code>, <code>submit_investigation</code> verifies fresh probes and executes without phoning.</span>
-        <span class="tag-mono">answering &ne; approval</span>
+        <span><strong>Fast path:</strong> Trusted runbooks run automatically without waking the on-call engineer.</span>
+        <span class="tag-mono">picking up the phone &ne; approval</span>
       </div>
     </section>
 
     <!-- ====================================================================
-         SLIDE 05: VERIFICATION, AUTO-DETECTED FIXES & UNIFIED MEMORY
+         SLIDE 05: VERIFICATION & UNIFIED MEMORY
          ==================================================================== -->
-    <section class="slide" data-title="Verification & Unified Memory" data-sub="Stage 6 recovery thresholds, config fix watcher, and unified learning loop">
+    <section class="slide" data-title="Recovery & Learning" data-sub="How we verify real recovery and learn from your engineering team">
       <div class="slide-head">
         <div class="slide-head-main">
-          <span class="kicker">04 // stages 05–06 (workflows.ts)</span>
-          <h2>Measured recovery &amp; unified incident memory</h2>
+          <span class="kicker">04 // verification &amp; memory</span>
+          <h2>Proving recovery &amp; learning from your team</h2>
         </div>
-        <span class="slide-sub">verification decides recovery · declines need no spoken reason</span>
+        <span class="slide-sub">never assume a fix worked &middot; measure it</span>
       </div>
 
       <div class="grid-12">
-        <!-- Left: Stage 6 Verification + Fix Watcher -->
+        <!-- Left: Verification -->
         <div class="pane col-5">
           <div class="pane-label">
-            <span>05 // stage 6 recovery verification</span>
-            <span>polled every 5s (120s limit)</span>
+            <span>05 // proving recovery</span>
+            <span>2-minute window</span>
           </div>
-          <h3>All three thresholds required to close</h3>
-          <p style="margin-bottom: 8px;">
-            Mitigations set explicit state (<code>expectedPreviousValue</code>) rather than toggles. Recovery is never declared on silence:
-          </p>
+          <h3>Three checks to close an incident</h3>
 
-          <div class="metric-rows">
+          <div class="metric-rows" style="margin-top: 10px;">
             <div class="metric-row">
               <span class="metric-fig">&ge; 10</span>
               <div class="metric-desc">
-                <strong>Successful synthetic checkouts</strong>
-                <span>Correlated by incident <code>run_id</code> after execution timestamp.</span>
+                <strong>Passing requests</strong>
+                <span>Live service requests succeed after the fix.</span>
               </div>
             </div>
             <div class="metric-row">
               <span class="metric-fig">&ge; 30s</span>
               <div class="metric-desc">
-                <strong>Sustained checkout window</strong>
-                <span>Span between first and last passing post-action checkout.</span>
+                <strong>Sustained health</strong>
+                <span>Service stays healthy across a 30+ second window.</span>
               </div>
             </div>
             <div class="metric-row">
               <span class="metric-fig">&ge; 10</span>
               <div class="metric-desc">
-                <strong>Matching Sentry checkout traces</strong>
-                <span>Fresh <code>op="checkout"</code> spans with <code>status="ok"</code> in Sentry.</span>
+                <strong>Clean Sentry traces</strong>
+                <span>Monitoring confirms zero errors on the request path.</span>
               </div>
             </div>
           </div>
-
-          <p style="font-size: 12.5px; color: var(--ink-muted); margin-top: 8px;">
-            * If Sentry lags when checkouts pass, status logs <code>"functional checks passed; telemetry confirmation pending"</code> and escalates on timeout.
-          </p>
         </div>
 
-        <!-- Right: Unified Learning Loop -->
+        <!-- Right: Learning Loop -->
         <div class="pane col-7">
           <div class="pane-label">
-            <span>06 // unified incident memory (decision_feedback + incidents.md + runbooks)</span>
-            <span>automatic closed-loop sync</span>
+            <span>06 // how the system learns</span>
+            <span>database + incidents.md + runbooks</span>
           </div>
-          <h3>How both approvals and refusals become operational memory</h3>
-          <ul class="sg-list" style="margin-top: 8px;">
-            <li><strong>Decline snapshot (<code>evidenceSnapshot</code>):</strong> Declining a proposal—even <em>without</em> stating a reason—captures raw probe latencies (e.g. <code>payments:1802ms</code>), config, and failing stage into <code>decision_feedback</code>.</li>
-            <li><strong>Automatic manual-fix detection (<code>watchForEngineerFix</code>):</strong> After a decline, the backend polls <code>/config</code> every 5s. When the SWE switches <code>paymentProvider &rarr; backup</code> (or disables recs), it automatically records <code>manual_resolution_recorded</code> and runs full Stage 6 verification.</li>
-            <li><strong>Live Markdown sync (<code>syncIncidentsMarkdown</code>):</strong> Every decision and verified resolution automatically re-renders <code>backend/incidents.md</code> and generates a manifest-defined retrospective (separating mitigation from root-cause repair).</li>
-            <li><strong>Evaluated runbooks (<code>createLearnedRunbook</code>):</strong> Verified human <code>disable_recommendations</code> fixes draft a versioned runbook tested against <strong>13 deterministic cases</strong> (8 fixed + 5 held-out refusal/counterexample cases: <code>draft &rarr; evaluated &rarr; authorised &rarr; suspended</code>).</li>
+          <h3>Turning human decisions into memory</h3>
+          <ul class="sg-list" style="margin-top: 10px;">
+            <li><strong>Snapshot on "No":</strong> Saves live probe readings whenever an engineer declines a proposal.</li>
+            <li><strong>Watch manual fixes:</strong> Polls your service config to detect what the engineer changed instead.</li>
+            <li><strong>Update logbook:</strong> Writes root cause, fix, and follow-up work to <code>incidents.md</code>.</li>
+            <li><strong>Draft runbooks:</strong> Turns proven fixes into reusable runbooks tested against safety cases.</li>
           </ul>
         </div>
       </div>
 
       <div class="callout-bar">
-        <span><strong>Safety invariant:</strong> Past lessons in <code>/tools/past_decisions</code> guide CREAO's next proposal but never expand the allowlist or bypass fresh probe gates.</span>
-        <span class="tag-mono">13/13 fixed &amp; held-out eval cases required</span>
+        <span><strong>Safety rule:</strong> Past memory guides the next diagnosis, but never skips live safety checks.</span>
+        <span class="tag-mono">verified before closing</span>
       </div>
     </section>
 
     <!-- ====================================================================
-         SLIDE 06: PRIVILEGE ISOLATION & END-TO-END VALIDATION ARC
+         SLIDE 06: PERMISSIONS & REAL-WORLD SCENARIOS
          ==================================================================== -->
-    <section class="slide" data-title="Trust & Validation Arc" data-sub="Token-scoped least privilege and the three verified learning scenarios">
+    <section class="slide" data-title="Permissions & Growth" data-sub="Strict access boundaries and how SecondShift gets smarter on any service">
       <div class="slide-head">
         <div class="slide-head-main">
-          <span class="kicker">05 // security &amp; end-to-end validation (selftest-workflows.ts)</span>
-          <h2>Credential isolation &amp; closed-loop validation scenarios</h2>
+          <span class="kicker">05 // access &amp; maturity</span>
+          <h2>Strict permissions &amp; how your service matures</h2>
         </div>
-        <span class="slide-sub">6 isolated bearer tokens · verified in automated stage 6–9 self-tests</span>
+        <span class="slide-sub">separated access &middot; 3 stages of learning</span>
       </div>
 
       <div class="grid-12">
-        <!-- Left: Token & Actor Matrix -->
+        <!-- Left: Permissions Matrix -->
         <div class="pane col-5">
           <div class="pane-label">
-            <span>credential &amp; actor boundaries</span>
-            <span>strict least-authority</span>
+            <span>access boundaries</span>
+            <span>separated keys</span>
           </div>
-          <h3>Scoped tokens across services</h3>
-          <table class="sg-table" style="margin-top: 6px;">
+          <h3>Who can do what</h3>
+          <table class="sg-table" style="margin-top: 10px;">
             <thead>
               <tr>
-                <th>Actor / Token</th>
-                <th>Authorized Capability</th>
-                <th>Hard Restriction</th>
+                <th>Component</th>
+                <th>Can Do</th>
+                <th>Cannot Do</th>
               </tr>
             </thead>
             <tbody>
               <tr>
-                <td><strong>CREAO Agent</strong><br><code>TOOL_TOKEN</code></td>
-                <td>Read manifest, telemetry, probes, <code>past_decisions</code>; submit result</td>
-                <td>Cannot mutate app or trigger faults</td>
+                <td><strong>CREAO Agent</strong></td>
+                <td>Read manifest, logs, probes, memory</td>
+                <td>Change service settings</td>
               </tr>
               <tr>
-                <td><strong>Voice Agent</strong><br><code>VOICE_TOOL_TOKEN</code></td>
-                <td>Read briefing; relay confirmed approve/decline</td>
-                <td>Cannot approve without confirmation</td>
+                <td><strong>Voice Agent</strong></td>
+                <td>Brief engineer, relay decision</td>
+                <td>Act without confirmation</td>
               </tr>
               <tr>
-                <td><strong>Backend</strong><br><code>DEMO_PROBE/ACTION</code></td>
-                <td>Gate proposals, run 1 idempotent action, verify</td>
-                <td>Refuses non-<code>demo</code> environments</td>
+                <td><strong>Backend</strong></td>
+                <td>Run 1 manifest-allowed fix</td>
+                <td>Run unlisted actions</td>
               </tr>
               <tr>
-                <td><strong>Responders</strong><br><code>DASHBOARD_TOKEN</code></td>
-                <td>Approve/decline; <code>primary</code> alone authorises/suspends runbooks</td>
-                <td><code>backup</code> blocked until escalated</td>
-              </tr>
-              <tr>
-                <td><strong>Test Runner</strong><br><code>DEV_TOKEN</code></td>
-                <td>Inject controlled faults &amp; reset demo-app</td>
-                <td>Invisible to CREAO &amp; backend</td>
+                <td><strong>Engineers</strong></td>
+                <td>Approve fixes &amp; enable runbooks</td>
+                <td>Backup blocked until escalated</td>
               </tr>
             </tbody>
           </table>
         </div>
 
-        <!-- Right: 3 Validation Scenarios -->
+        <!-- Right: 3 Maturity Stages -->
         <div class="pane col-7">
           <div class="pane-label">
-            <span>implemented validation arc</span>
-            <span>proven in selftest-workflows.ts &amp; run-scenario.sh</span>
+            <span>how any service matures over time</span>
+            <span>from human-guided to automatic</span>
           </div>
-          <h3>Three closed-loop scenarios</h3>
+          <h3>Three stages across repeated incidents</h3>
 
-          <div class="grid-3" style="margin-top: 8px;">
+          <div class="grid-3" style="margin-top: 10px;">
             <div class="pipe-step" style="border-top-color: var(--warn);">
               <div class="pipe-step-head">
-                <span class="pipe-num">scenario 01</span>
-                <span class="badge-mono badge-warn">refusal + watch</span>
+                <span class="pipe-num">stage 01</span>
+                <span class="badge-mono badge-warn">decline</span>
               </div>
-              <div class="pipe-title">Masked Pool Fault</div>
-              <p class="pipe-body">Recs time out (800ms) while payment probe is 1800ms. If <code>disable_recommendations</code> is proposed, Gate 2 blocks or SWE declines. Backend snapshots probes, detects SWE's switch to <code>backup</code>, verifies recovery, and syncs <code>incidents.md</code>.</p>
-              <div class="pipe-io">stored &rarr; decision_feedback</div>
+              <div class="pipe-title">Learn from "No"</div>
+              <p class="pipe-body">A misleading error triggers the wrong proposal. Your engineer declines and applies a manual fix. SecondShift watches and remembers.</p>
+              <div class="pipe-io">saved to memory</div>
             </div>
 
             <div class="pipe-step" style="border-top-color: var(--primary);">
               <div class="pipe-step-head">
-                <span class="pipe-num">scenario 02</span>
-                <span class="badge-mono badge-neutral">learned fix</span>
+                <span class="pipe-num">stage 02</span>
+                <span class="badge-mono badge-neutral">learned</span>
               </div>
-              <div class="pipe-title">Guided Recurrence</div>
-              <p class="pipe-body">Masked degradation recurs. CREAO reads <code>/tools/past_decisions</code>, matches fresh 1800ms payment probe against <code>evidence_when_declined</code>, cites <code>consulted_decisions</code>, and proposes <code>switch_payment_provider</code>. One phone approval resolves.</p>
-              <div class="pipe-io">0 wrong actions run</div>
+              <div class="pipe-title">Smarter Next Time</div>
+              <p class="pipe-body">The same outage pattern returns. CREAO matches live probes to Stage 01's snapshot and proposes the right fix immediately.</p>
+              <div class="pipe-io">right fix proposed</div>
             </div>
 
             <div class="pipe-step" style="border-top-color: var(--accent);">
               <div class="pipe-step-head">
-                <span class="pipe-num">scenario 03</span>
-                <span class="badge-mono badge-ok">authorised</span>
+                <span class="pipe-num">stage 03</span>
+                <span class="badge-mono badge-ok">auto-run</span>
               </div>
-              <div class="pipe-title">Evaluated Runbook</div>
-              <p class="pipe-body">Genuine rec outage approved &amp; verified &rarr; drafts <code>checkout-disable-recommendations v1</code> (passes 13/13 fixed &amp; held-out cases). Primary responder authorises it; next genuine outage executes automatically if fresh payment probe is healthy.</p>
-              <div class="pipe-io">auto-mitigated &amp; verified</div>
+              <div class="pipe-title">Hands-Free Fix</div>
+              <p class="pipe-body">A verified fix becomes a tested runbook. Once approved by your lead engineer, future occurrences resolve automatically.</p>
+              <div class="pipe-io">resolved automatically</div>
             </div>
-          </div>
-
-          <div class="pane-tinted" style="margin-top: 10px;">
-            <div class="pane-label" style="margin-bottom: 2px;">
-              <span>stage 9 controlled demo metrics (metrics.ts)</span>
-              <span class="mono">GET /dashboard-api/metrics</span>
-            </div>
-            <p style="font-size: 12.8px;">
-              Tracks <code>declinedProposals</code>, <code>declinesWithReason</code>, <code>authorisedRunbookExecutions</code>, <code>liveRunbookRefusals</code>, <code>correctRefusals</code> (6/6), <code>heldOutTotal</code> (5/5), and <code>averageAlertToVerifiedRecoveryMs</code>.
-            </p>
           </div>
         </div>
       </div>
 
       <div class="callout-bar">
-        <span><strong>Core result:</strong> Human interventions—including unspoken refusals—become tested, auditable incident memory while deterministic gates keep every mutation safe.</span>
-        <span class="tag-mono">secondshift // implementation verified</span>
+        <span><strong>Bottom line:</strong> Plug in any service via <code>service-manifest.json</code>—engineers stay in control and routine outages become automatic.</span>
+        <span class="tag-mono">secondshift</span>
       </div>
     </section>
 
