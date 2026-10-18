@@ -114,6 +114,10 @@ export async function initiateCall(incidentId: number, opts: InitiateCallOptions
         });
         return { skipped: false as const, call: getCall(activeCall.id) };
       } catch (err) {
+        const latest = getCall(activeCall.id);
+        if (latest && ["answered", "acknowledged", "approved"].includes(latest.outcome)) {
+          return { skipped: false as const, call: latest };
+        }
         addTimeline(incidentId, "system", "call_dial_failed", { callId: activeCall.id, error: String(err) }, "error");
         await recordCallOutcome(activeCall.id, "failed", { error: String(err), live: true });
         return { skipped: false as const, call: getCall(activeCall.id) };
@@ -162,6 +166,10 @@ export async function initiateCall(incidentId: number, opts: InitiateCallOptions
         callId,
       );
     } catch (err) {
+      const latest = getCall(callId);
+      if (latest && ["answered", "acknowledged", "approved"].includes(latest.outcome)) {
+        return { skipped: false as const, call: latest };
+      }
       addTimeline(incidentId, "system", "call_dial_failed", { callId, error: String(err) }, "error");
       await recordCallOutcome(callId, "failed", { error: String(err), live: shouldDialLive });
       return { skipped: false as const, call: getCall(callId) };
@@ -268,7 +276,7 @@ export async function recordCallOutcome(
   // Bounded retry + backup escalation when a call is unanswered or fails.
   if (outcome === "unanswered" || outcome === "failed") {
     const inc = getIncident(call.incident_id);
-    if (!inc || inc.status === "recovered" || inc.autonomy === "halted") return getCall(callId);
+    if (!inc || inc.status !== "awaiting_decision" || inc.autonomy === "halted") return getCall(callId);
     const svc = getService(inc.service);
     // A follow-up call is placed live if the original one was (it reached the provider), unless told otherwise.
     const live = detail?.live ?? Boolean(call.conversation_id);
