@@ -12,7 +12,7 @@
 document.getElementById("go").onclick = async () => {
   const out = document.getElementById("out");
   out.textContent = "Processing…"; out.className = "";
-  const res = await fetch("/checkout", {method:"POST",headers:{"content-type":"application/json"},
+  const res = await fetch("/checkout", {method:"POST",headers:{"content-type":"application/json","x-trigger-incident":"true"},
     body: JSON.stringify({items:[{sku:"sku-tee",qty:1},{sku:"sku-mug",qty:2}]})});
   const b = await res.json();
   out.className = b.ok ? "ok" : "bad";

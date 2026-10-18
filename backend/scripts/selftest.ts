@@ -4,7 +4,7 @@ import { resolve } from "node:path";
 const runner = resolve("node_modules/tsx/dist/cli.mjs");
 for (const testFile of ["src/selftest.ts", "src/selftest-policy.ts", "src/selftest-voice.ts", "src/selftest-workflows.ts"]) {
   const result = spawnSync(process.execPath, [runner, testFile], {
-    env: { ...process.env, DB_PATH: ":memory:" },
+    env: { ...process.env, DB_PATH: ":memory:", VOICE_AUTO_CALL: "false", PHONE_AUTO_NOTIFY: "false" },
     stdio: "inherit",
   });
   if (result.error) throw result.error;

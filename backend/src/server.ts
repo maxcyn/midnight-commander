@@ -489,6 +489,24 @@ app.post("/debug/alert", debugAuth, (req, res) => {
   res.json(out);
 });
 
+// Triggered automatically when a user clicks "Checkout" in the demo-app UI and hits a 5xx error.
+app.post("/auto-alert", (req, res) => {
+  const auth = req.get("authorization") ?? "";
+  const allowed = [process.env.DEMO_PROBE_TOKEN, process.env.DEBUG_TOKEN, process.env.TOOL_TOKEN].filter(Boolean);
+  if (!allowed.some((tok) => auth === `Bearer ${tok}`)) {
+    return res.status(401).json({ error: "unauthorized" });
+  }
+  const b = req.body ?? {};
+  const alert = parseSentryAlert({ data: { event: {
+    issue_id: b.issue_id ?? "ui-checkout-error", title: b.title ?? "Error: recommendation lookup timed out after 800ms",
+    event_id: b.event_id ?? `ui-${Date.now()}`, environment: b.environment ?? "demo",
+    tags: [["service", "checkout"], ...(b.run_id ? [["run_id", String(b.run_id)]] : [])],
+  } } })!;
+  const out = processAlert(String(b.delivery_id ?? `ui-${Date.now()}`), alert);
+  if (out.incidentId && out.outcome.startsWith("opened")) void startInvestigation(out.incidentId);
+  res.json(out);
+});
+
 // CREAO calls this when a run finishes. Validate, store, acknowledge quickly.
 app.post("/creao-callback", (req, res) => {
   const secret = process.env.WEBHOOK_SECRET;

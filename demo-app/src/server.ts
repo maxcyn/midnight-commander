@@ -97,7 +97,8 @@ app.use(express.static(fileURLToPath(new URL("../public", import.meta.url))));
 app.post("/checkout", async (req, res) => {
   const requestId = (req.get("x-request-id") ?? randomUUID()).slice(0, 64);
   // Opaque id the test runner attaches so evidence from one run can be isolated. Carries no scenario meaning.
-  const runId = (req.get("x-run-id") ?? "none").slice(0, 64);
+  const latestSyntheticRunId = [...requestLog].reverse().find((r) => r.runId && r.runId !== "none")?.runId;
+  const runId = (req.get("x-run-id") ?? latestSyntheticRunId ?? "none").slice(0, 64);
   const started = Date.now();
   let stage = "validation";
   const record = (ok: boolean, status: number, error?: string) =>
@@ -149,6 +150,20 @@ app.post("/checkout", async (req, res) => {
           tags: { failed_stage: e.stage },
           extra: { requestId, runId },
         });
+        if (req.get("x-trigger-incident") === "true") {
+          const backendUrl = process.env.BACKEND_URL ?? "http://localhost:3000";
+          void fetch(`${backendUrl}/auto-alert`, {
+            method: "POST",
+            headers: { Authorization: `Bearer ${PROBE_TOKEN}`, "Content-Type": "application/json" },
+            body: JSON.stringify({
+              issue_id: `ui-${e.stage}-${Date.now()}`,
+              title: `Error: ${e.message}`,
+              event_id: requestId,
+              environment: process.env.SENTRY_ENVIRONMENT ?? "demo",
+              run_id: runId !== "none" ? runId : undefined,
+            }),
+          }).catch((alertErr) => console.error("[auto-alert] failed to notify backend:", alertErr));
+        }
       }
       res.status(e.status).json({ ok: false, requestId, stage: e.stage, error: e.message });
     }
