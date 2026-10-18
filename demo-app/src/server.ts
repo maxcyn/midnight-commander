@@ -1,4 +1,5 @@
-﻿import { randomUUID } from "node:crypto";
+import { randomUUID } from "node:crypto";
+import * as Sentry from "@sentry/node";
 import express, { type NextFunction, type Request, type Response } from "express";
 
 const PORT = Number(process.env.PORT ?? 4000);
@@ -83,6 +84,8 @@ app.use(express.static(new URL("../public", import.meta.url).pathname));
 
 app.post("/checkout", async (req, res) => {
   const requestId = (req.get("x-request-id") ?? randomUUID()).slice(0, 64);
+  // Opaque id the test runner attaches so evidence from one run can be isolated. Carries no scenario meaning.
+  const runId = (req.get("x-run-id") ?? "none").slice(0, 64);
   const started = Date.now();
   let stage = "validation";
   const record = (ok: boolean, status: number, error?: string) =>
@@ -91,25 +94,53 @@ app.post("/checkout", async (req, res) => {
       latencyMs: Date.now() - started,
       recommendationsEnabled: state.recommendationsEnabled, error,
     });
-  try {
-    const { items, total } = validateBasket(req.body);
-    let recommendations: string[] = [];
-    if (state.recommendationsEnabled) {
-      stage = "recommendations";
-      // Deliberately not caught: a recommendation outage breaks checkout. That is the demo bug.
-      recommendations = await lookupRecommendations();
+  const attrs = { request_id: requestId, run_id: runId, recommendations_enabled: state.recommendationsEnabled };
+
+  await Sentry.startSpan({ name: "checkout", op: "checkout", attributes: attrs }, async (span) => {
+    Sentry.setTags({ request_id: requestId, run_id: runId });
+    try {
+      const { items, total } = validateBasket(req.body);
+      let recommendations: string[] = [];
+      if (state.recommendationsEnabled) {
+        stage = "recommendations";
+        // Deliberately not caught: a recommendation outage breaks checkout. That is the demo bug.
+        recommendations = await Sentry.startSpan({ name: "recommendations.lookup", op: "dependency.recommendations" }, async () => {
+          const t0 = Date.now();
+          const out = await lookupRecommendations();
+          Sentry.logger.info("recommendation lookup succeeded", { ...attrs, dependency: "recommendations", latency_ms: Date.now() - t0 });
+          return out;
+        });
+      } else {
+        Sentry.logger.info("recommendations skipped (feature disabled)", { ...attrs, dependency: "recommendations" });
+      }
+      stage = "payment";
+      const paymentId = await Sentry.startSpan({ name: "payment.charge", op: "dependency.payment" }, async () => {
+        const t0 = Date.now();
+        const id = await simulatedPayment(total);
+        Sentry.logger.info("payment succeeded", { ...attrs, dependency: "payment", latency_ms: Date.now() - t0 });
+        return id;
+      });
+      stage = "confirmation";
+      const orderId = `ord_${randomUUID().slice(0, 8)}`;
+      record(true, 200);
+      Sentry.logger.info("order confirmed", { ...attrs, order_id: orderId, total });
+      res.json({ ok: true, requestId, orderId, paymentId, items, total, recommendations });
+    } catch (err) {
+      const e = err instanceof DependencyError ? err : new DependencyError(stage, String(err), 500);
+      record(false, e.status, e.message);
+      span.setStatus({ code: 2, message: e.message });
+      span.setAttribute("failed_stage", e.stage);
+      if (e.status >= 500) {
+        // Server-side failures are the alertable ones; bad baskets (400) are the caller's problem.
+        Sentry.logger.error(`checkout failed at ${e.stage}: ${e.message}`, { ...attrs, dependency: e.stage, failed_stage: e.stage });
+        Sentry.captureException(err instanceof Error ? err : new Error(e.message), {
+          tags: { failed_stage: e.stage },
+          extra: { requestId, runId },
+        });
+      }
+      res.status(e.status).json({ ok: false, requestId, stage: e.stage, error: e.message });
     }
-    stage = "payment";
-    const paymentId = await simulatedPayment(total);
-    stage = "confirmation";
-    const orderId = `ord_${randomUUID().slice(0, 8)}`;
-    record(true, 200);
-    res.json({ ok: true, requestId, orderId, paymentId, items, total, recommendations });
-  } catch (err) {
-    const e = err instanceof DependencyError ? err : new DependencyError(stage, String(err), 500);
-    record(false, e.status, e.message);
-    res.status(e.status).json({ ok: false, requestId, stage: e.stage, error: e.message });
-  }
+  });
 });
 
 // ---- Auth helpers --------------------------------------------------------
@@ -127,6 +158,7 @@ app.post("/dev/recommendations", bearer(DEV_TOKEN), (req, res) => {
   if (typeof req.body?.enabled !== "boolean") return res.status(400).json({ error: "enabled must be boolean" });
   state.flagHistory.push({ at: new Date().toISOString(), from: state.recommendationsEnabled, to: req.body.enabled, by: "dev" });
   state.recommendationsEnabled = req.body.enabled;
+  Sentry.logger.info("feature flag changed", { flag: "recommendations", to: req.body.enabled, by: "dev" });
   res.json({ recommendationsEnabled: state.recommendationsEnabled });
 });
 
@@ -176,6 +208,9 @@ app.post("/actions/disable-recommendations", bearer(ACTION_TOKEN), (req, res) =>
     state.flagHistory.push({ at: new Date().toISOString(), from: true, to: false, by: String(req.body?.actor ?? "responder") });
     state.recommendationsEnabled = false;
   }
+  Sentry.logger.info(previous ? "mitigation applied: recommendations disabled" : "mitigation skipped: already disabled", {
+    action: "disable_recommendations", previous_value: previous, current_value: false, actor: String(req.body?.actor ?? "responder"),
+  });
   res.json({ action: "disable_recommendations", previousValue: previous, currentValue: false, changed: previous });
 });
 

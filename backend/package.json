@@ -4,7 +4,8 @@
   "type": "module",
   "scripts": {
     "dev": "tsx watch --env-file=.env src/server.ts",
-    "start": "tsx --env-file=.env src/server.ts"
+    "start": "tsx --env-file=.env src/server.ts",
+    "selftest": "DB_PATH=:memory: tsx --env-file=.env src/selftest.ts && DB_PATH=:memory: tsx --env-file=.env src/selftest-policy.ts"
   },
   "dependencies": {
     "express": "^4.21.0"
