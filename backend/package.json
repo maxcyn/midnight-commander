@@ -7,7 +7,8 @@
     "start": "tsx --env-file=.env src/server.ts",
     "selftest": "tsx scripts/selftest.ts",
     "configure:voice": "tsx --env-file=.env scripts/configure-elevenlabs.ts",
-    "demo-report": "tsx --env-file=.env scripts/demo-report.ts"
+    "demo-report": "tsx --env-file=.env scripts/demo-report.ts",
+    "tunnel": "ngrok http --url=frosty-acuteness-dexterity.ngrok-free.dev 3000"
   },
   "dependencies": {
     "express": "^4.21.0"

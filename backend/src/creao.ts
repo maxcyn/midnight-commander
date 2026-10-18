@@ -40,7 +40,8 @@ export async function startRun(
   inputs: Record<string, unknown>,
   idempotencyKey: string,
 ): Promise<CreaoRun> {
-  const publicUrl = env("PUBLIC_URL").replace(/\/+$/, "");
+  const rawUrl = env("PUBLIC_URL").replace(/\/+$/, "");
+  const publicUrl = /^https?:\/\//i.test(rawUrl) ? rawUrl : `https://${rawUrl}`;
   const callback = new URL(`${publicUrl}/creao-callback`);
   callback.searchParams.set("token", env("WEBHOOK_SECRET"));
   const appId = env("CREAO_APP_ID");

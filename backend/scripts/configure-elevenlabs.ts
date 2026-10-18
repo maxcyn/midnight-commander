@@ -13,11 +13,12 @@ function env(name: string): string {
 
 const apiKey = env("ELEVENLABS_API_KEY");
 const agentId = env("ELEVENLABS_AGENT_ID");
-const publicUrl = env("PUBLIC_URL").replace(/\/+$/, "");
+const rawUrl = env("PUBLIC_URL").replace(/\/+$/, "");
+const publicUrl = /^https?:\/\//i.test(rawUrl) ? rawUrl : `https://${rawUrl}`;
 const toolToken = env("TOOL_TOKEN");
 const allowedActionNames = manifest.allowed_actions.map((a) => a.action);
 
-const headers = { Authorization: `Bearer ${toolToken}` };
+const headers = { Authorization: `Bearer ${toolToken}`, "ngrok-skip-browser-warning": "true" };
 const incidentPathParam = {
   incident_id: {
     type: "string",
