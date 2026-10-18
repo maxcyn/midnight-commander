@@ -1,14 +1,25 @@
-// Verifies the Stage 1 "done when" criteria against a running demo app.
+﻿// Verifies the Stage 1 "done when" criteria against a running demo app.
 const BASE = `http://localhost:${process.env.PORT ?? 4000}`;
-const dev = { authorization: `Bearer ${process.env.DEV_TOKEN}`, "content-type": "application/json" };
-const act = { authorization: `Bearer ${process.env.ACTION_TOKEN}`, "content-type": "application/json" };
-const probe = { authorization: `Bearer ${process.env.PROBE_TOKEN}` };
+const dev = {
+  authorization: `Bearer ${process.env.DEV_TOKEN ?? "change-me"}`,
+  "content-type": "application/json",
+};
+const act = {
+  authorization: `Bearer ${process.env.ACTION_TOKEN ?? "change-me"}`,
+  "content-type": "application/json",
+};
+const probe = {
+  authorization: `Bearer ${process.env.PROBE_TOKEN ?? "change-me"}`,
+};
 
 const post = (path: string, headers: Record<string, string>, body: unknown = {}) =>
   fetch(BASE + path, { method: "POST", headers, body: JSON.stringify(body) }).then((r) => r.json() as Promise<any>);
 const checkout = () =>
-  fetch(BASE + "/checkout", { method: "POST", headers: { "content-type": "application/json" },
-    body: JSON.stringify({ items: [{ sku: "sku-tee", qty: 1 }] }) }).then(async (r) => ({ status: r.status, body: (await r.json()) as any }));
+  fetch(BASE + "/checkout", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ items: [{ sku: "sku-tee", qty: 1 }] }),
+  }).then(async (r) => ({ status: r.status, body: (await r.json()) as any }));
 const getProbe = (dep: string) => fetch(`${BASE}/probe/${dep}`, { headers: probe }).then((r) => r.json() as Promise<any>);
 
 let failures = 0;
@@ -45,7 +56,10 @@ check("probe: payments unhealthy", (await getProbe("payments")).healthy === fals
 
 const noAuth = await fetch(BASE + "/actions/disable-recommendations", { method: "POST" });
 check("mitigation rejects missing auth", noAuth.status === 401);
-const wrongToken = await fetch(BASE + "/dev/faults", { method: "POST", headers: { authorization: `Bearer ${process.env.PROBE_TOKEN}` } });
+const wrongToken = await fetch(BASE + "/dev/faults", {
+  method: "POST",
+  headers: { authorization: `Bearer wrong-token` },
+});
 check("probe token cannot set faults", wrongToken.status === 401);
 
 await post("/dev/reset", dev);

@@ -1,4 +1,4 @@
-import { appendFileSync, mkdirSync } from "node:fs";
+﻿import { appendFileSync, mkdirSync } from "node:fs";
 
 const BASE = process.env.TARGET ?? `http://localhost:${process.env.PORT ?? 4000}`;
 const INTERVAL_MS = Number(process.env.INTERVAL_MS ?? 2000);
