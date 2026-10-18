@@ -180,7 +180,7 @@ export function incidentDetail(id: number) {
     timeline: db.prepare(`SELECT * FROM timeline_events WHERE incident_id = ? ORDER BY id`).all(id),
     proposedActions: db.prepare(`SELECT * FROM proposed_actions WHERE incident_id = ? ORDER BY id`).all(id),
     investigations: db.prepare(`SELECT id, run_id, status, started_at, finished_at, result, decision FROM investigations WHERE incident_id = ? ORDER BY id`).all(id),
-    phoneCalls: db.prepare(`SELECT id, responder, phone_number, retell_call_id, status, briefing, created_at, updated_at, outcome FROM phone_calls WHERE incident_id = ? ORDER BY id`).all(id),
+    phoneCalls: db.prepare(`SELECT id, responder, phone_number, status, briefing, created_at, updated_at, outcome FROM phone_calls WHERE incident_id = ? ORDER BY id`).all(id),
     calls: db.prepare(`SELECT * FROM calls WHERE incident_id = ? ORDER BY id`).all(id),
     executions: db.prepare(`SELECT * FROM action_executions WHERE incident_id = ? ORDER BY id`).all(id),
     retrospective: db.prepare(`SELECT * FROM retrospectives WHERE incident_id = ?`).get(id) ?? null,

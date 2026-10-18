@@ -32,12 +32,12 @@ echo "   incident #$id"
 
 echo "4. Waiting for CREAO to investigate (up to 4 min)"
 for i in $(seq 1 48); do
-  status=$(curl -s "${dashboard[@]}" "localhost:3000/incidents/$id" | python3 -c "import sys,json;print(json.load(sys.stdin)['incident']['status'])")
+  status=$(curl -s "${dashboard[@]}" "localhost:3000/dashboard-api/incidents/$id" | python3 -c "import sys,json;print(json.load(sys.stdin)['incident']['status'])")
   [ "$status" != "investigating" ] && [ "$status" != "open" ] && break
   sleep 5
 done
 
-curl -s "${dashboard[@]}" "localhost:3000/incidents/$id" | python3 -c "
+curl -s "${dashboard[@]}" "localhost:3000/dashboard-api/incidents/$id" | python3 -c "
 import sys,json
 d=json.load(sys.stdin); i=d['incident']
 print(f\"\n=== Incident #{i['id']}: status={i['status']} owner={i['owner']} ===\")

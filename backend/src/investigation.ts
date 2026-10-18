@@ -2,8 +2,7 @@ import { db } from "./db.js";
 import { startRun } from "./creao.js";
 import { addEvidence, addTimeline, getIncident, transition } from "./incidents.js";
 import { reportBackendError } from "./monitoring.js";
-import { initiateCall } from "./voice.js";
-import { notifyResponder } from "./workflows.js";
+import { initiateCall, notifyResponder } from "./voice.js";
 
 const now = () => new Date().toISOString();
 const BUDGET_MS = Number(process.env.INVESTIGATION_BUDGET_MS ?? 180_000);
@@ -162,10 +161,11 @@ function fallback(incidentId: number, invId: number, status: "failed" | "timed_o
   if (inc?.status === "investigating") transition(incidentId, "awaiting_decision", "system", { reason: why });
   addTimeline(incidentId, "system", "engineer_contact_needed", { reason: `investigation ${status}: ${why}`, knownSoFar: "alert only" }, "degraded");
   if (process.env.PHONE_AUTO_NOTIFY === "true") {
+    const report = (error: unknown) => { void reportBackendError(error, { operation: "investigation_fallback_notification", incidentId }); };
     try {
-      notifyResponder(incidentId, "primary");
+      void notifyResponder(incidentId, "primary").catch(report);
     } catch (error) {
-      void reportBackendError(error, { operation: "investigation_fallback_notification", incidentId });
+      report(error);
     }
   }
 }

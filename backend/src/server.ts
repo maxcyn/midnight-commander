@@ -4,13 +4,12 @@ import { db } from "./db.js";
 import { createHmac, timingSafeEqual } from "node:crypto";
 import { createHash } from "node:crypto";
 import { fileURLToPath } from "node:url";
-import { getRun, startRun } from "./creao.js";
 import { getEvidence } from "./sentry.js";
 import { startInvestigation, submitInvestigation, validateResult, onRunFinished } from "./investigation.js";
 import { reportBackendError } from "./monitoring.js";
-import { acknowledge, addEvidence, escalate, getIncident, incidentDetail, listIncidents, parseSentryAlert, processAlert, takeOver } from "./incidents.js";
-import { approveAndExecute, approveVoiceAction, authoriseRunbook, declineAction, executeAuthorisedRunbook, notifyResponder, pastDecisions, recordManualResolution, recordPhoneOutcome, suspendRunbook, verifyAuthorisedRunbookApplicability } from "./workflows.js";
-import { approveProposedAction, getCall, getLatestCallForIncident, getVoiceBriefing, getVoiceStatus, initiateCall, recordCallOutcome, runVoiceProbe, voiceTakeOver, type CallOutcome, voiceDeclineAction } from "./voice.js";
+import { acknowledge, addEvidence, getIncident, incidentDetail, listIncidents, parseSentryAlert, processAlert, takeOver } from "./incidents.js";
+import { approveAndExecute, authoriseRunbook, declineAction, executeAuthorisedRunbook, pastDecisions, recordManualResolution, suspendRunbook, verifyAuthorisedRunbookApplicability } from "./workflows.js";
+import { approveProposedAction, getCall, getLatestCallForIncident, getVoiceBriefing, initiateCall, notifyResponder, recordCallOutcome, type CallOutcome, voiceDeclineAction } from "./voice.js";
 
 const PORT = Number(process.env.PORT ?? 3000);
 const TOOL_TOKEN = process.env.TOOL_TOKEN;
@@ -20,23 +19,6 @@ const app = express();
 // Keep the raw bytes: webhook signatures are computed over them, not over re-serialised JSON.
 app.use(express.json({ limit: "1mb", verify: (req, _res, buf) => { (req as any).rawBody = buf; } }));
 
-function verifyRetellSignature(rawBody: Buffer | undefined, signature: string, apiKey: string) {
-  const match = /^v=(\d+),d=([a-f0-9]+)$/i.exec(signature);
-  if (!rawBody || !match || Math.abs(Date.now() - Number(match[1])) > 5 * 60_000) return false;
-  const expected = createHmac("sha256", apiKey).update(Buffer.concat([rawBody, Buffer.from(match[1])])).digest();
-  const actual = Buffer.from(match[2], "hex");
-  return actual.length === expected.length && timingSafeEqual(actual, expected);
-}
-
-const requireRetellSignature = (req: Request, res: Response, next: NextFunction) => {
-  const apiKey = process.env.RETELL_API_KEY;
-  if (!apiKey) return res.status(503).json({ error: "RETELL_API_KEY is not configured" });
-  if (!verifyRetellSignature((req as any).rawBody, req.get("x-retell-signature") ?? "", apiKey)) {
-    return res.status(401).json({ error: "invalid Retell function signature" });
-  }
-  next();
-};
-
 const dashboardAuth = (req: Request, res: Response, next: NextFunction) => {
   const token = process.env.DASHBOARD_TOKEN;
   if (!token) return res.status(503).json({ error: "DASHBOARD_TOKEN is not configured" });
@@ -45,13 +27,6 @@ const dashboardAuth = (req: Request, res: Response, next: NextFunction) => {
   if (![process.env.PRIMARY_RESPONDER ?? "primary-engineer", process.env.BACKUP_RESPONDER ?? "backup-engineer"].includes(actor ?? "")) {
     return res.status(403).json({ error: "x-responder must identify a configured responder" });
   }
-  next();
-};
-
-const voiceAuth = (req: Request, res: Response, next: NextFunction) => {
-  const token = process.env.VOICE_TOOL_TOKEN;
-  if (!token) return res.status(503).json({ error: "VOICE_TOOL_TOKEN is not configured" });
-  if (req.get("authorization") !== `Bearer ${token}`) return res.status(401).json({ error: "unauthorized" });
   next();
 };
 
@@ -103,16 +78,16 @@ app.post("/dashboard-api/incidents/:id/actions/:actionId/decline", dashboardAuth
     res.status(409).json({ error: error instanceof Error ? error.message : String(error) });
   }
 });
-app.post("/dashboard-api/incidents/:id/notify", dashboardAuth, (req, res) => {
+app.post("/dashboard-api/incidents/:id/notify", dashboardAuth, async (req, res) => {
   const target = req.body?.target;
   if (target !== "primary" && target !== "backup") return res.status(400).json({ error: "target must be primary or backup" });
   const incident = getIncident(Number(req.params.id));
   if (!incident) return res.status(404).json({ error: "incident not found" });
   if (target === "backup" && incident.escalation_state !== "escalated_to_backup") {
-    return res.status(409).json({ error: "escalate the incident before calling the backup responder" });
+    return res.status(409).json({ error: "the backup responder can be called only after the incident has been escalated" });
   }
   try {
-    res.status(202).json(notifyResponder(incident.id, target));
+    res.status(202).json(await notifyResponder(incident.id, target));
   } catch (error) {
     res.status(503).json({ error: error instanceof Error ? error.message : String(error) });
   }
@@ -164,9 +139,6 @@ function debugAuth(req: Request, res: Response, next: NextFunction) {
   next();
 }
 
-// In-memory for now; becomes the incident database later.
-const submissions: unknown[] = [];
-
 app.get("/health", (_req, res) => {
   res.json({ ok: true });
 });
@@ -178,7 +150,6 @@ app.get("/tools/ping", requireToken, (req, res) => {
 
 app.post("/tools/submit_investigation", requireToken, async (req, res) => {
   console.log(`[submit_investigation] incident_id=${req.body?.incident_id ?? "missing"}`);
-  submissions.push({ receivedAt: new Date().toISOString(), body: req.body });
   try {
     let backendVerifiedRunbook = false;
     const validation = validateResult(req.body);
@@ -263,11 +234,6 @@ app.get("/tools/runbooks", requireToken, (_req, res) => {
   res.json(rows.map((r) => ({ id: r.runbook_id, version: r.version, status: r.lifecycle, spec: JSON.parse(r.spec) })));
 });
 
-// Handy for checking what CREAO actually sent.
-app.get("/debug/submissions", debugAuth, (_req, res) => {
-  res.json(submissions);
-});
-
 // Evidence tool for the CREAO investigator. Window-based for now; scoped to an incident in Stage 3.
 // Deliberately returns only observed telemetry: nothing about how failures were injected.
 app.get("/tools/sentry_evidence", requireToken, async (req, res) => {
@@ -293,7 +259,6 @@ app.get("/tools/sentry_evidence", requireToken, async (req, res) => {
 });
 
 // Sentry alert webhook: verify signature, drop duplicate deliveries, save, acknowledge fast, process later.
-const alerts: { receivedAt: string; deliveryId: string; body: unknown }[] = [];
 function processSentryDelivery(deliveryId: string, body: unknown) {
   try {
     const alert = parseSentryAlert(body);
@@ -310,8 +275,9 @@ function processSentryDelivery(deliveryId: string, body: unknown) {
     if (out.incidentId && out.outcome.startsWith("opened")) {
       void startInvestigation(out.incidentId).catch((error) => { void reportBackendError(error, { operation: "investigation_start", incidentId: out.incidentId }); });
       if (process.env.PHONE_AUTO_NOTIFY === "true") {
-        try { notifyResponder(out.incidentId, "primary"); }
-        catch (error) { void reportBackendError(error, { operation: "primary_phone_notification", incidentId: out.incidentId }); }
+        const report = (error: unknown) => { void reportBackendError(error, { operation: "primary_phone_notification", incidentId: out.incidentId }); };
+        try { void notifyResponder(out.incidentId, "primary").catch(report); }
+        catch (error) { report(error); }
       }
     }
   } catch (error) {
@@ -344,7 +310,6 @@ app.post("/sentry-webhook", (req, res) => {
     ).run(deliveryId, new Date().toISOString());
     return res.json({ ok: true, duplicate: true });
   }
-  alerts.push({ receivedAt: new Date().toISOString(), deliveryId, body: req.body });
   res.json({ ok: true }); // acknowledge first; the work below happens after the response
   setImmediate(() => processSentryDelivery(deliveryId, req.body));
 });
@@ -355,181 +320,6 @@ setImmediate(() => {
   for (const event of pending) processSentryDelivery(event.delivery_id, JSON.parse(event.body));
 });
 
-app.post("/retell-webhook", (req, res) => {
-  const apiKey = process.env.RETELL_API_KEY;
-  if (!apiKey) return res.status(503).json({ error: "RETELL_API_KEY is not configured" });
-  const rawBody = (req as any).rawBody as Buffer;
-  const signature = req.get("x-retell-signature") ?? "";
-  const match = /^v=(\d+),d=([a-f0-9]+)$/i.exec(signature);
-  if (!match || Math.abs(Date.now() - Number(match[1])) > 5 * 60_000) {
-    return res.status(401).json({ error: "invalid or expired Retell signature" });
-  }
-  const expected = createHmac("sha256", apiKey).update(Buffer.concat([rawBody, Buffer.from(match[1])])).digest();
-  const actual = Buffer.from(match[2], "hex");
-  if (actual.length !== expected.length || !timingSafeEqual(actual, expected)) {
-    return res.status(401).json({ error: "invalid Retell signature" });
-  }
-  const eventId = createHash("sha256").update(rawBody).digest("hex");
-  const saved = db.prepare(`INSERT OR IGNORE INTO retell_webhook_events (event_id, received_at) VALUES (?, ?)`)
-    .run(eventId, new Date().toISOString());
-  if (saved.changes === 0) return res.status(204).end();
-  const event = String(req.body?.event ?? "");
-  const call = req.body?.call ?? {};
-  const callId = String(call.call_id ?? "");
-  const recordId = Number(call.metadata?.call_record_id);
-  let record = recordId
-    ? db.prepare(`SELECT id, incident_id, responder, phone_number, status FROM phone_calls WHERE id = ?`).get(recordId) as any
-    : undefined;
-  if (!record && callId) {
-    record = db.prepare(`SELECT id, incident_id, responder, phone_number, status, retell_call_id FROM phone_calls WHERE retell_call_id = ?`).get(callId) as any;
-  }
-  if (record && callId && !record.retell_call_id) {
-    db.prepare(`UPDATE phone_calls SET retell_call_id = ?, updated_at = ? WHERE id = ?`)
-      .run(callId, new Date().toISOString(), record.id);
-  }
-  if (!record || !callId) {
-    console.warn(`[retell-webhook] ${event} could not be linked to a registered call`);
-    return res.status(204).end();
-  }
-
-  if (event === "call_started") {
-    recordPhoneOutcome(callId, "answered");
-  } else if (event === "call_ended") {
-    const reason = String(call.disconnection_reason ?? "call ended");
-    const unanswered = ["dial_no_answer", "dial_failed", "dial_busy"].includes(reason);
-    recordPhoneOutcome(callId, unanswered ? (reason === "dial_no_answer" ? "unanswered" : "failed") : "answered", reason);
-    if (unanswered && record.responder === (process.env.PRIMARY_RESPONDER ?? "primary-engineer")) {
-      try {
-        escalate(record.incident_id, "primary responder did not answer");
-        notifyResponder(record.incident_id, "backup");
-      } catch (error) {
-        void reportBackendError(error, { operation: "backup_phone_escalation", incidentId: record.incident_id });
-      }
-    }
-  } else if (event === "call_analyzed") {
-    const outcome = call.call_analysis?.custom_analysis_data?.responder_outcome;
-    if (outcome === "acknowledged" || outcome === "approved") recordPhoneOutcome(callId, outcome);
-  }
-  res.status(204).end();
-});
-
-function answeredVoiceCall(callId: unknown) {
-  if (typeof callId !== "string" || !callId) return undefined;
-  return db.prepare(`SELECT id, incident_id, responder, status FROM phone_calls WHERE retell_call_id = ? AND status IN ('answered', 'acknowledged', 'approved')`)
-    .get(callId) as { id: number; incident_id: number; responder: string; status: string } | undefined;
-}
-
-const voiceArgs = (req: Request) => req.body?.args ?? req.body ?? {};
-const voiceCallId = (req: Request) => req.body?.call?.call_id ?? voiceArgs(req).call_id ?? req.query.call_id;
-
-app.post("/voice/briefing", voiceAuth, requireRetellSignature, (req, res) => {
-  const call = answeredVoiceCall(voiceCallId(req));
-  if (!call) return res.status(403).json({ error: "an active registered responder call is required" });
-  const detail = incidentDetail(call.incident_id);
-  if (!detail) return res.status(404).json({ error: "incident not found" });
-  const decision = [...detail.timeline].reverse().find((item: any) => String(item.action).startsWith("decision_")) as any;
-  res.json({
-    incident: detail.incident,
-    briefing: decision?.detail ? JSON.parse(decision.detail).briefing : `Incident ${call.incident_id}: checkout failures are under investigation.`,
-    pendingActions: detail.proposedActions.filter((action: any) =>
-      action.approval_state === "pending" && Date.parse(action.expires_at) > Date.now()),
-  });
-});
-app.post("/voice/evidence", voiceAuth, requireRetellSignature, async (req, res) => {
-  const call = answeredVoiceCall(voiceCallId(req));
-  if (!call) return res.status(403).json({ error: "an active registered responder call is required" });
-  const incident = getIncident(call.incident_id);
-  if (!incident) return res.status(404).json({ error: "incident not found" });
-  const minutes = Math.min(120, Math.max(2, Math.ceil((Date.now() - Date.parse(incident.opened_at)) / 60_000) + 1));
-  try {
-    res.json(await getEvidence(minutes));
-  } catch (error) {
-    res.status(502).json({ error: error instanceof Error ? error.message : String(error) });
-  }
-});
-app.post("/voice/status", voiceAuth, requireRetellSignature, (req, res) => {
-  const call = answeredVoiceCall(voiceCallId(req));
-  if (!call) return res.status(403).json({ error: "an active registered responder call is required" });
-  const detail = incidentDetail(call.incident_id);
-  if (!detail) return res.status(404).json({ error: "incident not found" });
-  const latestSample = detail.executions.length
-    ? db.prepare(`SELECT * FROM verification_samples WHERE execution_id = ? ORDER BY id DESC LIMIT 1`)
-      .get((detail.executions[detail.executions.length - 1] as any).id) ?? null
-    : null;
-  res.json({
-    incident_id: call.incident_id,
-    status: detail.incident.status,
-    recovered: detail.incident.status === "recovered",
-    recovery_note: detail.retrospective?.summary ?? null,
-    latest_verification: latestSample,
-  });
-});
-app.post("/voice/probe", voiceAuth, requireRetellSignature, async (req, res) => {
-  const args = voiceArgs(req);
-  const call = answeredVoiceCall(voiceCallId(req));
-  if (!call) return res.status(403).json({ error: "an active registered responder call is required" });
-  const dependency = String(args.dependency ?? "");
-  if (!["recommendations", "payments"].includes(dependency)) {
-    return res.status(400).json({ error: "dependency must be recommendations or payments" });
-  }
-  try {
-    const response = await demoGet(`/probe/${dependency}`);
-    res.status(response.status).json(await response.json());
-  } catch (error) {
-    res.status(502).json({ error: error instanceof Error ? error.message : String(error) });
-  }
-});
-app.post("/voice/acknowledge", voiceAuth, requireRetellSignature, (req, res) => {
-  const callId = String(voiceCallId(req) ?? "");
-  const call = answeredVoiceCall(callId);
-  if (!call) return res.status(403).json({ error: "an active registered responder call is required" });
-  try {
-    acknowledge(call.incident_id, call.responder);
-    recordPhoneOutcome(callId, "acknowledged", "responder acknowledged incident");
-    res.json({ ok: true, incident_id: call.incident_id });
-  } catch (error) {
-    res.status(409).json({ error: error instanceof Error ? error.message : String(error) });
-  }
-});
-app.post("/voice/approve", voiceAuth, requireRetellSignature, async (req, res) => {
-  const args = voiceArgs(req);
-  if (typeof args.action_id !== "number" || typeof args.pin !== "string") {
-    return res.status(400).json({ error: "action_id and pin are required" });
-  }
-  try {
-    res.json(await approveVoiceAction(String(voiceCallId(req) ?? ""), args.action_id, args.pin));
-  } catch (error) {
-    res.status(409).json({ error: error instanceof Error ? error.message : String(error) });
-  }
-});
-app.post("/voice/decline", voiceAuth, requireRetellSignature, (req, res) => {
-  const args = voiceArgs(req);
-  const callId = String(voiceCallId(req) ?? "");
-  const call = answeredVoiceCall(callId);
-  if (!call) return res.status(403).json({ error: "an active registered responder call is required" });
-  if (typeof args.action_id !== "number") return res.status(400).json({ error: "action_id is required" });
-  try {
-    const result = declineAction(call.incident_id, args.action_id, call.responder, typeof args.reason === "string" ? args.reason : undefined);
-    recordPhoneOutcome(callId, "acknowledged", `declined action ${args.action_id}`);
-    res.json(result);
-  } catch (error) {
-    res.status(409).json({ error: error instanceof Error ? error.message : String(error) });
-  }
-});
-app.post("/voice/take-over", voiceAuth, requireRetellSignature, (req, res) => {
-  const callId = String(voiceCallId(req) ?? "");
-  const call = answeredVoiceCall(callId);
-  if (!call) return res.status(403).json({ error: "an active registered responder call is required" });
-  try {
-    takeOver(call.incident_id, call.responder);
-    recordPhoneOutcome(callId, "acknowledged", "responder took over; autonomous actions halted");
-    res.json({ ok: true, incident_id: call.incident_id, autonomy: "halted" });
-  } catch (error) {
-    res.status(409).json({ error: error instanceof Error ? error.message : String(error) });
-  }
-});
-
-// ---- Incident API (dashboard and voice agent read from here) -----------
 const wrap = (fn: (req: Request, res: Response) => unknown) => (req: Request, res: Response) => {
   try {
     const out = fn(req, res);
@@ -538,15 +328,6 @@ const wrap = (fn: (req: Request, res: Response) => unknown) => (req: Request, re
     res.status(400).json({ error: err instanceof Error ? err.message : String(err) });
   }
 };
-app.get("/incidents", dashboardAuth, wrap(() => listIncidents()));
-app.get("/incidents/:id", dashboardAuth, wrap((req, res) => {
-  const d = incidentDetail(Number(req.params.id));
-  if (!d) return void res.status(404).json({ error: "not found" });
-  return d;
-}));
-app.post("/incidents/:id/ack", dashboardAuth, wrap((req) => { acknowledge(Number(req.params.id), req.get("x-responder")!); return { ok: true }; }));
-app.post("/incidents/:id/escalate", dashboardAuth, wrap((req) => { escalate(Number(req.params.id), String(req.body?.reason ?? "manual")); return { ok: true }; }));
-app.post("/incidents/:id/take-over", dashboardAuth, wrap((req) => { takeOver(Number(req.params.id), req.get("x-responder")!); return { ok: true }; }));
 
 // ---- Stage 5: ElevenLabs + Photon voice agent endpoints ------------------
 const elevenVoiceAuth = (req: Request, res: Response, next: NextFunction) => {
@@ -559,16 +340,6 @@ const elevenVoiceAuth = (req: Request, res: Response, next: NextFunction) => {
 };
 
 app.get("/voice/incidents/:id/briefing", elevenVoiceAuth, wrap((req) => getVoiceBriefing(Number(req.params.id))));
-app.get("/voice/incidents/:id/status", elevenVoiceAuth, wrap((req) => getVoiceStatus(Number(req.params.id))));
-
-app.post("/voice/incidents/:id/probe", elevenVoiceAuth, async (req, res) => {
-  const dep = String(req.body?.dependency ?? req.query.dependency ?? "") as "recommendations" | "payments";
-  try {
-    res.json(await runVoiceProbe(Number(req.params.id), dep));
-  } catch (err) {
-    res.status(400).json({ error: err instanceof Error ? err.message : String(err) });
-  }
-});
 
 app.post("/voice/incidents/:id/approve", elevenVoiceAuth, async (req, res) => {
   const incidentId = Number(req.params.id);
@@ -627,9 +398,6 @@ app.post("/voice/incidents/:id/decline", elevenVoiceAuth, wrap((req) =>
     action: req.body?.action ? String(req.body.action) : undefined,
     reason: typeof req.body?.reason === "string" ? req.body.reason : undefined,
   }),
-));
-app.post("/voice/incidents/:id/take-over", elevenVoiceAuth, wrap((req) =>
-  voiceTakeOver(Number(req.params.id), String(req.body?.responder ?? process.env.PRIMARY_RESPONDER ?? "primary-engineer")),
 ));
 
 app.post("/incidents/:id/call", elevenVoiceAuth, async (req, res) => {
@@ -694,26 +462,7 @@ app.post("/debug/alert", debugAuth, (req, res) => {
   res.json(out);
 });
 
-app.get("/debug/alerts", debugAuth, (_req, res) => {
-  res.json(alerts);
-});
-
-// Kick off a CREAO investigation. Manual for now; later the Sentry webhook calls this.
-app.post("/debug/trigger", debugAuth, async (req, res) => {
-  const incidentId = String(req.body?.incident_id ?? "test");
-  const attempt = String(req.body?.attempt ?? "1");
-  try {
-    const run = await startRun({ incident_id: incidentId }, `incident-${incidentId}-investigation-${attempt}`);
-    console.log(`[creao] started run ${run.id} for incident ${incidentId}`);
-    res.status(202).json(run);
-  } catch (err) {
-    void reportBackendError(err, { operation: "creao_start" });
-    res.status(502).json({ error: String(err) });
-  }
-});
-
 // CREAO calls this when a run finishes. Validate, store, acknowledge quickly.
-const callbacks: unknown[] = [];
 app.post("/creao-callback", (req, res) => {
   const secret = process.env.WEBHOOK_SECRET;
   if (!secret || req.query.token !== secret) {
@@ -721,22 +470,8 @@ app.post("/creao-callback", (req, res) => {
     return res.status(401).json({ error: "unauthorized" });
   }
   console.log(`[creao-callback] run_id=${req.body?.runId ?? "missing"} status=${req.body?.status ?? "missing"}`);
-  callbacks.push({ receivedAt: new Date().toISOString(), body: req.body });
   res.json({ ok: true });
   if (req.body?.runId) setImmediate(() => onRunFinished(String(req.body.runId), String(req.body.status)));
-});
-
-app.get("/debug/callbacks", debugAuth, (_req, res) => {
-  res.json(callbacks);
-});
-
-// Polling fallback if the webhook never arrives.
-app.get("/debug/run/:id", debugAuth, async (req, res) => {
-  try {
-    res.json(await getRun(String(req.params.id)));
-  } catch (err) {
-    res.status(502).json({ error: String(err) });
-  }
 });
 
 app.listen(PORT, () => console.log(`backend listening on http://localhost:${PORT}`));

@@ -110,11 +110,6 @@ CREATE TABLE IF NOT EXISTS webhook_retries (
   last_received_at TEXT NOT NULL
 );
 
-CREATE TABLE IF NOT EXISTS retell_webhook_events (
-  event_id TEXT PRIMARY KEY,
-  received_at TEXT NOT NULL
-);
-
 CREATE TABLE IF NOT EXISTS action_executions (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   proposed_action_id INTEGER NOT NULL UNIQUE REFERENCES proposed_actions(id),
@@ -143,7 +138,7 @@ CREATE TABLE IF NOT EXISTS phone_calls (
   incident_id INTEGER NOT NULL REFERENCES incidents(id),
   responder TEXT NOT NULL,
   phone_number TEXT NOT NULL,
-  retell_call_id TEXT UNIQUE,
+  retell_call_id TEXT UNIQUE,          -- unused; kept so existing databases keep their schema
   status TEXT NOT NULL,
   briefing TEXT NOT NULL,
   created_at TEXT NOT NULL,

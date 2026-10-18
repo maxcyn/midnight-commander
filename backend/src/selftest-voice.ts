@@ -1,16 +1,14 @@
 // Stage 5 checks: voice briefing, tool operations, approval binding, bounded retry & backup escalation.
 import { db } from "./db.js";
-import { addEvidence, getIncident, incidentDetail, parseSentryAlert, processAlert, transition } from "./incidents.js";
+import { addEvidence, getIncident, incidentDetail, parseSentryAlert, processAlert, takeOver, transition } from "./incidents.js";
 import { submitInvestigation } from "./investigation.js";
 import {
   approveProposedAction,
   getVoiceBriefing,
-  getVoiceStatus,
   initiateCall,
+  notifyResponder,
   recordCallOutcome,
-  runVoiceProbe,
   voiceDeclineAction,
-  voiceTakeOver,
 } from "./voice.js";
 
 process.env.FIX_WATCH_INTERVAL_MS = "3600000"; // no background fix-watching during unit tests
@@ -80,11 +78,7 @@ processAlert("v-d2", parseSentryAlert({ data: { event: { issue_id: "v-101", titl
 const dupCall = await initiateCall(inc1);
 check("active call suppresses duplicate call attempts", dupCall.skipped === true && incidentDetail(inc1)!.calls.length === 1);
 
-// ---- 4. Read-only live probe from voice agent ----------------------------
-const probeOut = await runVoiceProbe(inc1, "payments", async () => ({ healthy: true, latencyMs: 55, at: "2026-10-18T05:01:00Z" }));
-check("voice probe checks dependency and records evidence", probeOut.healthy === true && incidentDetail(inc1)!.evidence.some((e: any) => e.source === "voice.probe.payments"));
-
-// ---- 5. Bound operational approval checks --------------------------------
+// ---- 4. Bound operational approval checks --------------------------------
 let r = approveProposedAction({ incidentId: inc1, action: "disable_recommendations", responder: "random-stranger", confirmed: true });
 check("unenrolled caller cannot approve", !r.approved && r.reason.includes("not an enrolled responder"), JSON.stringify(r));
 
@@ -104,11 +98,7 @@ check("enrolled + confirmed + verified approval succeeds and moves to mitigating
 detail1 = incidentDetail(inc1)!;
 check("call outcome and proposed_action state are marked approved", detail1.calls[0].outcome === "approved" && detail1.proposedActions[0].approval_state === "approved");
 
-// ---- 6. Status check ("Did it work?") ------------------------------------
-const st = getVoiceStatus(inc1);
-check("voice status reports current state accurately", st.status === "mitigating" && st.spokenSummary.includes("mitigation") || st.spokenSummary.includes("Mitigation"), JSON.stringify(st));
-
-// ---- 7. Unanswered call bounded retry -> backup escalation ---------------
+// ---- 5. Unanswered call bounded retry -> backup escalation ---------------
 const inc2 = openIncident("v-d3", "v-202");
 transition(inc2, "awaiting_decision", "system");
 await initiateCall(inc2, { live: false });
@@ -127,7 +117,20 @@ check(
   JSON.stringify(calls2),
 );
 
- // ---- 7b. Declining by voice -----------------------------------------------
+// ---- 5b. Calls are de-duplicated per responder; notifying needs a valid number ----
+const incB = openIncident("v-d5", "v-404");
+transition(incB, "awaiting_decision", "system");
+await initiateCall(incB, { responder: "primary-engineer", live: false });
+const backupCall = await initiateCall(incB, { responder: "backup-engineer", live: false });
+check("an active primary call does not suppress a call to the backup", backupCall.skipped === false && incidentDetail(incB)!.calls.length === 2);
+const savedBackupPhone = process.env.BACKUP_PHONE;
+delete process.env.BACKUP_PHONE;
+check("notifying without a configured number is refused", (() => { try { void notifyResponder(incB, "backup"); return false; } catch { return true; } })());
+process.env.BACKUP_PHONE = "12345";
+check("notifying a non-E.164 number is refused", (() => { try { void notifyResponder(incB, "backup"); return false; } catch { return true; } })());
+if (savedBackupPhone === undefined) delete process.env.BACKUP_PHONE; else process.env.BACKUP_PHONE = savedBackupPhone;
+
+// ---- 6. Declining by voice -----------------------------------------------
 const inc3 = openIncident("v-d4", "v-303");
 transition(inc3, "awaiting_decision", "system");
 const act3 = Number(db.prepare(`INSERT INTO proposed_actions (incident_id, action, target_environment, parameters, expires_at, created_at) VALUES (?,?,?,?,?,?)`)
@@ -140,9 +143,9 @@ check("declining records a lesson with no reason", (db.prepare(`SELECT reason, a
 check("declining twice is refused (nothing pending)", (() => { try { voiceDeclineAction({ incidentId: inc3, responder: "primary-engineer" }); return false; } catch { return true; } })());
 check("declining is not approval", incidentDetail(inc3)!.timeline.some((t: any) => t.action === "action_declined") && !incidentDetail(inc3)!.timeline.some((t: any) => t.action === "action_approved"));
 
-// ---- 8. "I'll handle it" transfers control & halts autonomy --------------
-const to = voiceTakeOver(inc2, "backup-engineer");
-check("take-over halts autonomy and transfers ownership to backup", to.autonomy === "halted" && getIncident(inc2).owner === "backup-engineer");
+// ---- 7. Dashboard take-over halts autonomous calls -----------------------
+takeOver(inc2, "backup-engineer");
+check("take-over halts autonomy and transfers ownership to backup", getIncident(inc2).autonomy === "halted" && getIncident(inc2).owner === "backup-engineer");
 const afterTakeoverCall = await initiateCall(inc2, { live: false });
 check("no new autonomous calls after human take-over", afterTakeoverCall.skipped === true);
 

@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SecondShift — Architecture</title>
+<style>
+  :root { --bg:#0b1020; --panel:#141b33; --line:#2a3560; --text:#e7ebf7; --muted:#9aa5c7;
+          --sentry:#a855f7; --agent:#22c55e; --rec:#38bdf8; --voice:#f59e0b; --exec:#ef4444; --md:#eab308; }
+  * { box-sizing:border-box; margin:0; padding:0; }
+  body { background:var(--bg); color:var(--text); font-family:Inter,Segoe UI,system-ui,sans-serif; overflow:hidden; }
+  .slide { position:absolute; inset:0; padding:56px 72px; display:none; flex-direction:column; gap:22px; }
+  .slide.active { display:flex; }
+  h1 { font-size:54px; letter-spacing:-1px; }
+  h2 { font-size:34px; }
+  h3 { font-size:18px; color:var(--muted); font-weight:500; }
+  p, li { font-size:19px; line-height:1.55; color:#cfd6ee; }
+  ul { padding-left:22px; display:flex; flex-direction:column; gap:6px; }
+  code, pre { font-family:Consolas,ui-monospace,monospace; }
+  pre { background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:16px 18px; font-size:14.5px; line-height:1.5; overflow:auto; color:#d6dcf5; }
+  .tag { display:inline-block; padding:3px 10px; border-radius:999px; font-size:13px; font-weight:600; color:#0b1020; }
+  .grid { display:grid; gap:18px; }
+  .g2 { grid-template-columns:1fr 1fr; } .g3 { grid-template-columns:repeat(3,1fr); }
+  .card { background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:18px 20px; }
+  .card h4 { font-size:17px; margin-bottom:8px; }
+  .card p, .card li { font-size:16px; }
+  .flow { display:flex; align-items:stretch; gap:10px; margin-top:10px; }
+  .node { flex:1; background:var(--panel); border:2px solid var(--c); border-radius:12px; padding:14px; display:flex; flex-direction:column; gap:6px; }
+  .node b { color:var(--c); font-size:15px; text-transform:uppercase; letter-spacing:.5px; }
+  .node span { font-size:14.5px; color:#cfd6ee; line-height:1.4; }
+  .arrow { align-self:center; color:var(--muted); font-size:26px; }
+  .store { margin-top:14px; display:flex; gap:14px; }
+  .store .node { flex:none; width:auto; min-width:260px; border-style:dashed; }
+  table { border-collapse:collapse; width:100%; font-size:14.5px; }
+  th, td { border:1px solid var(--line); padding:8px 10px; text-align:left; vertical-align:top; }
+  th { background:#1b2446; color:var(--muted); font-weight:600; }
+  .muted { color:var(--muted); }
+  .footer { position:fixed; bottom:18px; right:28px; color:var(--muted); font-size:14px; }
+  .hint { position:fixed; bottom:18px; left:28px; color:#56608a; font-size:13px; }
+  .big { font-size:24px; color:#dfe5fb; max-width:1000px; }
+</style>
+</head>
+<body>
+
+<!-- 1 -->
+<section class="slide active" style="justify-content:center">
+  <h3>Hackathon project · Midnight Commander</h3>
+  <h1>SecondShift</h1>
+  <p class="big">An on-call teammate that detects a bug, recalls how similar issues were fixed before,
+  recommends a fix, and phones the engineer to decide — without opening a laptop.</p>
+  <div style="display:flex;gap:10px;margin-top:8px">
+    <span class="tag" style="background:var(--sentry)">Sentry</span>
+    <span class="tag" style="background:var(--agent)">Context agent</span>
+    <span class="tag" style="background:var(--rec)">Recommendation agent</span>
+    <span class="tag" style="background:var(--voice)">ElevenLabs + Photon</span>
+  </div>
+</section>
+
+<!-- 2 -->
+<section class="slide">
+  <h2>End-to-end pipeline</h2>
+  <div class="flow">
+    <div class="node" style="--c:var(--sentry)"><b>1 · Detect</b><span>App instrumented with Sentry: errors, structured logs, traces. Alert rule fires a signed webhook.</span></div>
+    <div class="arrow">&rarr;</div>
+    <div class="node" style="--c:var(--agent)"><b>2 · Collect context</b><span>Context agent pulls Sentry evidence + live probes, reads <code>incidents.md</code>, picks top 5 similar past issues.</span></div>
+    <div class="arrow">&rarr;</div>
+    <div class="node" style="--c:var(--rec)"><b>3 · Recommend</b><span>Recommendation agent proposes a fix grounded in evidence and precedent. Backend policy gate validates it.</span></div>
+    <div class="arrow">&rarr;</div>
+    <div class="node" style="--c:var(--voice)"><b>4 · Call the SWE</b><span>ElevenLabs voice agent over Photon SIP briefs the engineer, who approves or declines.</span></div>
+    <div class="arrow">&rarr;</div>
+    <div class="node" style="--c:var(--exec)"><b>5 · Act &amp; verify</b><span>Backend executes the approved action once, then verifies recovery with real traffic and fresh traces.</span></div>
+  </div>
+  <div class="store">
+    <div class="node" style="--c:var(--md)"><b>incidents.md</b><span>Past issues &amp; resolutions. Curated manually by the SWE. Read-only to agents.</span></div>
+    <div class="node" style="--c:var(--muted)"><b>Live incident state</b><span>Current incident, timeline, pending action, call status (small backend store).</span></div>
+    <div class="node" style="--c:var(--md)"><b>6 · Close the loop</b><span>System drafts a suggested row; the SWE reviews and commits it to <code>incidents.md</code>.</span></div>
+  </div>
+</section>
+
+<!-- 3 -->
+<section class="slide">
+  <h2><span style="color:var(--sentry)">1 ·</span> Detection with Sentry</h2>
+  <div class="grid g2">
+    <div class="card"><h4>Instrumentation (demo app)</h4><ul>
+      <li>Errors on failed checkouts</li>
+      <li>Spans: checkout &rarr; recommendations &rarr; payment</li>
+      <li>Structured logs: dependency outcomes, flag changes</li>
+      <li>Attributes: service, env, release, request &amp; run ID</li></ul></div>
+    <div class="card"><h4>Alert intake (backend)</h4><ul>
+      <li>Verify the webhook's HMAC signature</li>
+      <li>Save, acknowledge fast, process asynchronously</li>
+      <li>Same delivery retried &rarr; processed once</li>
+      <li>Same issue + env recurring &rarr; attach, don't re-page</li>
+      <li>Open incident, assign primary &amp; backup owner</li></ul></div>
+  </div>
+  <p class="muted">Output: an incident ID handed to the context agent.</p>
+</section>
+
+<!-- 4 -->
+<section class="slide">
+  <h2><span style="color:var(--agent)">2 ·</span> Context agent + <code>incidents.md</code></h2>
+  <div class="grid g2">
+    <div class="card"><h4>Gathers fresh evidence</h4><ul>
+      <li><code>sentry_evidence</code> — errors, logs, spans for the window</li>
+      <li><code>feature_config</code> — current flags &amp; provider</li>
+      <li><code>probe</code> — live health of each dependency</li>
+      <li>Every item gets a <code>source_id</code> the backend can check</li></ul></div>
+    <div class="card"><h4>Recalls similar past issues</h4><ul>
+      <li>Parse the table in <code>incidents.md</code></li>
+      <li>Filter in code: same service / failing stage</li>
+      <li>LLM ranks remaining rows on symptoms + evidence</li>
+      <li>Return <b>top 5</b> with a one-line "why similar"</li></ul></div>
+  </div>
+  <pre>| ID    | Date       | Service  | Symptom / error signature              | Failing stage   | Root cause                      | Fix applied              | Outcome   | Follow-up                       |
+|-------|------------|----------|----------------------------------------|-----------------|---------------------------------|--------------------------|-----------|---------------------------------|
+| INC-7 | 2026-10-12 | checkout | recommendation lookup timed out 800ms  | recommendations | recommendation service outage   | disable_recommendations  | recovered | make checkout tolerate outage   |
+| INC-9 | 2026-10-15 | checkout | recommendation timeout, payment slow   | recommendations | payment provider saturating pool| switch_payment_provider  | recovered | isolate connection pools        |</pre>
+</section>
+
+<!-- 5 -->
+<section class="slide">
+  <h2>Hand-off: the context bundle</h2>
+  <div class="grid g2">
+    <pre>{
+  "incident_id": 12,
+  "impact": "checkout 504s at recommendations since 14:02",
+  "evidence": [
+    { "source": "demo.probe", "source_id": "probe:payments:…",
+      "healthy": true, "latencyMs": 1840 },
+    { "source": "sentry.error", "source_id": "evt_…",
+      "failed_stage": "recommendations" }
+  ],
+  "similar_issues": [
+    { "id": "INC-9", "why": "same symptom AND slow payment probe",
+      "fix": "switch_payment_provider", "outcome": "recovered" },
+    { "id": "INC-7", "why": "same symptom, payment was fast",
+      "fix": "disable_recommendations", "outcome": "recovered" }
+    /* … up to 5 */
+  ]
+}</pre>
+    <div class="card"><h4>Rules</h4><ul>
+      <li>Past issues are <b>guidance, not evidence</b></li>
+      <li>Similar symptoms &ne; same cause — check what differs now</li>
+      <li>No match &rarr; empty list, no invented precedent</li>
+      <li>Agent 1 never proposes; it only assembles context</li></ul></div>
+  </div>
+</section>
+
+<!-- 6 -->
+<section class="slide">
+  <h2><span style="color:var(--rec)">3 ·</span> Recommendation agent + policy gate</h2>
+  <div class="grid g2">
+    <div class="card"><h4>Agent output</h4><ul>
+      <li>Hypotheses: <i>supported / inconclusive / contradicted</i> — no % confidence</li>
+      <li>Proposed action from the allowed list + tradeoff</li>
+      <li><code>based_on</code>: which past issue IDs it followed or rejected, and why</li>
+      <li>A short spoken briefing for the call</li></ul></div>
+    <div class="card"><h4>Backend gate (deterministic)</h4><ul>
+      <li>Cited <code>source_id</code>s must exist and be &lt; 15 min old</li>
+      <li>Exactly one supported cause</li>
+      <li>Action on allowlist and matches that cause</li>
+      <li>Target environment = <code>demo</code></li>
+      <li>Fails &rarr; escalate to the SWE with no proposal</li></ul></div>
+  </div>
+  <p class="muted">The model proposes. The backend decides what may be offered. The human decides what runs.</p>
+</section>
+
+<!-- 7 -->
+<section class="slide">
+  <h2><span style="color:var(--voice)">4 ·</span> The phone call — ElevenLabs + Photon</h2>
+  <p>Photon provides the phone number and SIP trunk; ElevenLabs runs the conversation. The voice agent speaks from the same incident record.</p>
+  <table>
+    <tr><th>SWE says</th><th>Voice tool</th><th>Backend effect</th></tr>
+    <tr><td>"Explain the evidence"</td><td><code>explain_evidence</code></td><td>Reads briefing, hypotheses, similar issues</td></tr>
+    <tr><td>"Yes, do it"</td><td><code>approve_action</code></td><td>Executes the exact pending action</td></tr>
+    <tr><td>"No" / "I'll handle it"</td><td><code>decline_action</code></td><td>Records decline; watches for the SWE's own fix and verifies it</td></tr>
+  </table>
+  <p class="muted">Unanswered &rarr; bounded retry &rarr; escalate to backup. Answering is not approval.</p>
+</section>
+
+<!-- 8 -->
+<section class="slide">
+  <h2><span style="color:var(--exec)">5 ·</span> Execute &amp; verify</h2>
+  <div class="grid g3">
+    <div class="card"><h4>Before acting</h4><ul>
+      <li>Re-run probes &amp; config check</li>
+      <li>Approval bound to action, incident, responder, expiry</li>
+      <li>One mutation per action — retries are no-ops</li></ul></div>
+    <div class="card"><h4>Verification</h4><ul>
+      <li>&ge; 10 successful synthetic checkouts</li>
+      <li>Spanning &ge; 30 seconds</li>
+      <li>&ge; 10 successful Sentry checkout traces</li></ul></div>
+    <div class="card"><h4>If it fails</h4><ul>
+      <li>No automatic retry</li>
+      <li>Escalate to backup</li>
+      <li>Never reported as "resolved"</li></ul></div>
+  </div>
+  <p class="muted">SWE fixed it themselves? The backend detects the config change and runs the same verification.</p>
+</section>
+
+<!-- 9 -->
+<section class="slide">
+  <h2><span style="color:var(--md)">6 ·</span> Closing the loop</h2>
+  <div class="grid g2">
+    <div class="card"><h4>After verified recovery</h4><ul>
+      <li>System drafts a suggested <code>incidents.md</code> row: symptom, evidence at the time, fix, outcome, follow-up</li>
+      <li>Shown on the dashboard / in the retrospective</li>
+      <li>SWE edits and commits it — the file stays human-curated</li></ul></div>
+    <div class="card"><h4>Why a markdown file</h4><ul>
+      <li>Readable and reviewable in a PR</li>
+      <li>SWE controls what the agent learns from</li>
+      <li>Bad lessons are deleted with a line edit</li>
+      <li>No hidden state shaping recommendations</li></ul></div>
+  </div>
+</section>
+
+<!-- 10 -->
+<section class="slide">
+  <h2>Trust boundaries</h2>
+  <table>
+    <tr><th>Component</th><th>Can</th><th>Cannot</th></tr>
+    <tr><td>Context agent</td><td>Read Sentry, probes, config, <code>incidents.md</code></td><td>Propose or change anything</td></tr>
+    <tr><td>Recommendation agent</td><td>Submit one structured proposal</td><td>Execute, pick non-allowlisted actions</td></tr>
+    <tr><td>Voice agent</td><td>Brief, relay approve/decline</td><td>Approve without explicit confirmation</td></tr>
+    <tr><td>Backend</td><td>Execute approved action, verify</td><td>Inject faults, touch non-demo envs</td></tr>
+    <tr><td>SWE</td><td>Approve, decline, fix, curate <code>incidents.md</code></td><td>—</td></tr>
+  </table>
+</section>
+
+<!-- 11 -->
+<section class="slide">
+  <h2>Demo story</h2>
+  <div class="grid g3">
+    <div class="card"><h4>Incident A</h4><p>Recommendations time out. No precedent. Agent proposes <i>disable recommendations</i>. SWE approves by phone. Verified recovered. SWE adds INC-7.</p></div>
+    <div class="card"><h4>Incident B</h4><p>Same symptom, but payment probe is slow. INC-7 is similar — but the gate blocks disabling recommendations. SWE declines, switches provider. Detected and verified. SWE adds INC-9.</p></div>
+    <div class="card"><h4>Incident C</h4><p>Same masked pattern returns. Context agent surfaces INC-9 first. Agent recommends <i>switch payment provider</i>, citing INC-9. One phone "yes" &rarr; recovered.</p></div>
+  </div>
+  <p class="big" style="margin-top:12px">Each fix makes the next recommendation better — and a human stays in control of every change.</p>
+</section>
+
+<div class="footer" id="counter"></div>
+<div class="hint">&larr; / &rarr; or click to navigate</div>
+<script>
+  const slides = [...document.querySelectorAll('.slide')];
+  let i = 0;
+  const show = (n) => { slides[i].classList.remove('active'); i = (n + slides.length) % slides.length; slides[i].classList.add('active');
+    document.getElementById('counter').textContent = `${i + 1} / ${slides.length}`; };
+  document.addEventListener('keydown', (e) => {
+    if (['ArrowRight','PageDown',' '].includes(e.key)) show(i + 1);
+    if (['ArrowLeft','PageUp'].includes(e.key)) show(i - 1);
+  });
+  document.addEventListener('click', (e) => show(e.clientX > innerWidth / 2 ? i + 1 : i - 1));
+  show(0);
+</script>
+</body>
+</html>

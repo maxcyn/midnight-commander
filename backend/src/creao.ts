@@ -50,8 +50,3 @@ export async function startRun(
   });
   return parseRun(result);
 }
-
-export async function getRun(id: string): Promise<CreaoRun> {
-  const result = await request(`/runs/${encodeURIComponent(id)}`, { method: "GET" });
-  return parseRun(result);
-}

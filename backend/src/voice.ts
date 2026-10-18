@@ -1,5 +1,5 @@
 import { db } from "./db.js";
-import { acknowledge, addEvidence, addTimeline, escalate, getIncident, takeOver, transition } from "./incidents.js";
+import { acknowledge, addTimeline, escalate, getIncident, transition } from "./incidents.js";
 import { declineAction } from "./workflows.js";
 
 export type CallOutcome = "initiated" | "answered" | "acknowledged" | "approved" | "failed" | "unanswered";
@@ -43,11 +43,11 @@ export function buildBriefing(incidentId: number) {
     const base = String(parsedResult.call_briefing).trim();
     const prefix = base.toLowerCase().startsWith("secondshift") ? "" : `SecondShift here about incident ${incidentId}. `;
     const suffix = pendingAction
-      ? " Would you like the evidence, approve this action, or take over?"
-      : " Would you like the evidence, check a dependency, or take over?";
+      ? " Would you like the evidence, or shall I approve or decline this action?"
+      : " Would you like the evidence?";
     briefing = `${prefix}${base}${base.endsWith("?") ? "" : suffix}`;
   } else {
-    briefing = `SecondShift here about incident ${incidentId} on ${inc.service} (${inc.environment}). ${inc.title}. Automated diagnosis did not finish in time, so no changes were made. Would you like me to check payments or recommendations live, or will you take over?`;
+    briefing = `SecondShift here about incident ${incidentId} on ${inc.service} (${inc.environment}). ${inc.title}. Automated diagnosis did not finish in time, so no changes were made. Please check the incident dashboard.`;
   }
 
   return {
@@ -85,9 +85,9 @@ export async function initiateCall(incidentId: number, opts: InitiateCallOptions
 
   const activeCall = db
     .prepare(
-      `SELECT * FROM calls WHERE incident_id = ? AND outcome IN ('initiated', 'answered', 'acknowledged', 'approved') ORDER BY id DESC LIMIT 1`,
+      `SELECT * FROM calls WHERE incident_id = ? AND responder = ? AND outcome IN ('initiated', 'answered', 'acknowledged', 'approved') ORDER BY id DESC LIMIT 1`,
     )
-    .get(incidentId) as any | undefined;
+    .get(incidentId, responder) as any | undefined;
   if (activeCall) {
     // If an un-dialed (dry-run) call record already exists and caller now requests a live dial, dial it now.
     if (shouldDialLive && !activeCall.conversation_id && activeCall.outcome === "initiated") {
@@ -160,12 +160,6 @@ export async function initiateCall(incidentId: number, opts: InitiateCallOptions
         dial.sip_call_id ?? null,
         now(),
         callId,
-      );
-      db.prepare(`UPDATE phone_calls SET retell_call_id = ?, updated_at = ? WHERE incident_id = ? AND responder = ?`).run(
-        dial.conversation_id ?? null,
-        now(),
-        incidentId,
-        responder,
       );
     } catch (err) {
       addTimeline(incidentId, "system", "call_dial_failed", { callId, error: String(err) }, "error");
@@ -276,19 +270,21 @@ export async function recordCallOutcome(
     const inc = getIncident(call.incident_id);
     if (!inc || inc.status === "recovered" || inc.autonomy === "halted") return getCall(callId);
     const svc = getService(inc.service);
+    // A follow-up call is placed live if the original one was (it reached the provider), unless told otherwise.
+    const live = detail?.live ?? Boolean(call.conversation_id);
 
     if (call.responder === svc.primary_responder && call.attempt < MAX_PRIMARY_ATTEMPTS) {
       await initiateCall(call.incident_id, {
         responder: svc.primary_responder,
         attempt: call.attempt + 1,
-        live: detail?.live ?? false,
+        live,
       });
     } else if (call.responder === svc.primary_responder) {
       escalate(call.incident_id, `primary responder ${outcome} after ${call.attempt} attempt(s)`);
       await initiateCall(call.incident_id, {
         responder: svc.backup_responder,
         attempt: 1,
-        live: detail?.live ?? false,
+        live,
       });
     } else {
       addTimeline(call.incident_id, "system", "backup_responder_unreachable", { callId, responder: call.responder }, "error");
@@ -296,6 +292,21 @@ export async function recordCallOutcome(
   }
 
   return getCall(callId);
+}
+
+// Place a live call to the configured primary or backup responder (dashboard button, PHONE_AUTO_NOTIFY, fallback).
+export function notifyResponder(incidentId: number, target: "primary" | "backup" = "primary") {
+  const inc = getIncident(incidentId);
+  if (!inc) throw new Error(`incident ${incidentId} not found`);
+  const svc = getService(inc.service);
+  const phoneVar = target === "primary" ? "PRIMARY_PHONE" : "BACKUP_PHONE";
+  const phone = process.env[phoneVar];
+  if (!phone) throw new Error(`${phoneVar} is not set`);
+  if (!/^\+[1-9]\d{7,14}$/.test(phone)) throw new Error(`${phoneVar} must use E.164 format`);
+  return initiateCall(incidentId, {
+    responder: target === "primary" ? svc.primary_responder : svc.backup_responder,
+    live: true,
+  });
 }
 
 // ---- Voice agent operations (Stage 5 table in plan.md) -------------------
@@ -328,47 +339,7 @@ export function getVoiceBriefing(incidentId: number) {
   };
 }
 
-// 2. "Check payments" -> Request a read-only live dependency check
-export async function runVoiceProbe(
-  incidentId: number,
-  dependency: "recommendations" | "payments",
-  fetcher?: (dep: "recommendations" | "payments") => Promise<{ healthy: boolean; latencyMs: number; error?: string; at?: string }>,
-) {
-  markCallAnsweredIfInitiated(incidentId);
-  const inc = getIncident(incidentId);
-  if (!inc) throw new Error(`incident ${incidentId} not found`);
-  if (!["recommendations", "payments"].includes(dependency)) {
-    throw new Error("dependency must be recommendations or payments");
-  }
-
-  const defaultFetcher = async (dep: "recommendations" | "payments") => {
-    const base = process.env.DEMO_APP_URL ?? "http://localhost:4000";
-    const r = await fetch(`${base}/probe/${dep}`, {
-      headers: { Authorization: `Bearer ${process.env.DEMO_PROBE_TOKEN}` },
-    });
-    if (!r.ok) throw new Error(`probe HTTP ${r.status}`);
-    return (await r.json()) as { healthy: boolean; latencyMs: number; error?: string; at?: string };
-  };
-
-  const probeResult = await (fetcher ?? defaultFetcher)(dependency);
-  const observedAt = probeResult.at ?? now();
-  addEvidence(incidentId, `voice.probe.${dependency}`, `probe-${Date.now()}`, observedAt, probeResult);
-  addTimeline(incidentId, "voice-agent", `probe_${dependency}`, probeResult, probeResult.healthy ? "ok" : "degraded");
-
-  return {
-    incidentId,
-    dependency,
-    healthy: probeResult.healthy,
-    latencyMs: probeResult.latencyMs,
-    error: probeResult.error ?? null,
-    observedAt,
-    spokenSummary: probeResult.healthy
-      ? `Live check: ${dependency} is healthy (${probeResult.latencyMs}ms).`
-      : `Live check: ${dependency} is failing (${probeResult.error ?? "unhealthy"}, ${probeResult.latencyMs}ms).`,
-  };
-}
-
-// 3. "Disable recommendations" -> Confirm the specific pending action
+// 2. "Disable recommendations" -> Confirm the specific pending action
 export interface ApprovalInput {
   incidentId: number;
   action: string;
@@ -446,8 +417,7 @@ export function approveProposedAction(input: ApprovalInput) {
   };
 }
 
-// 4. "I'll handle it" -> Transfer control and stop new autonomous actions
-// "No, don't do that": decline the pending proposal. No reason is needed; the backend snapshots the incident's own
+// 3. "No, don't do that": decline the pending proposal. No reason is needed; the backend snapshots the incident's own
 // evidence and then watches for the engineer's fix, so the engineer only has to make the change.
 export function voiceDeclineAction(input: { incidentId: number; responder: string; action?: string; reason?: string }) {
   markCallAnsweredIfInitiated(input.incidentId);
@@ -474,79 +444,5 @@ export function voiceDeclineAction(input: { incidentId: number; responder: strin
     action: pending.action,
     status: out.status,
     spokenSummary: `Understood. I will not run ${pending.action.replaceAll("_", " ")}; nothing was changed. Make your fix and I will verify recovery.`,
-  };
-}
-
-export function voiceTakeOver(incidentId: number, responder: string) {
-  markCallAnsweredIfInitiated(incidentId);
-  const inc = getIncident(incidentId);
-  if (!inc) throw new Error(`incident ${incidentId} not found`);
-  if (!isEnrolledResponder(inc.service, responder)) {
-    throw new Error(`responder '${responder}' is not an enrolled responder for ${inc.service}`);
-  }
-
-  db.prepare(`UPDATE proposed_actions SET approval_state = 'cancelled_by_takeover' WHERE incident_id = ? AND approval_state = 'pending'`).run(incidentId);
-  acknowledge(incidentId, responder);
-  takeOver(incidentId, responder);
-
-  const call = getLatestCallForIncident(incidentId);
-  if (call && call.outcome !== "approved") {
-    db.prepare(`UPDATE calls SET outcome = 'acknowledged', updated_at = ?, ended_at = ? WHERE id = ?`).run(now(), now(), call.id);
-  }
-
-  return {
-    ok: true as const,
-    incidentId,
-    owner: responder,
-    autonomy: "halted",
-    spokenSummary: `Understood. Ownership of incident ${incidentId} is transferred to ${responder} and autonomous actions are halted.`,
-  };
-}
-
-// 5. "Did it work?" -> Retrieve verification status
-export function getVoiceStatus(incidentId: number) {
-  markCallAnsweredIfInitiated(incidentId);
-  const inc = getIncident(incidentId);
-  if (!inc) throw new Error(`incident ${incidentId} not found`);
-  const latestAction = db
-    .prepare(`SELECT * FROM proposed_actions WHERE incident_id = ? ORDER BY id DESC LIMIT 1`)
-    .get(incidentId) as any | undefined;
-  const recentTimeline = db
-    .prepare(`SELECT at, actor, action, result, detail FROM timeline_events WHERE incident_id = ? ORDER BY id DESC LIMIT 5`)
-    .all(incidentId) as any[];
-
-  let spokenSummary = `Incident ${incidentId} is currently ${inc.status}.`;
-  if (inc.status === "recovered") {
-    spokenSummary = `Incident ${incidentId} has recovered at ${inc.recovered_at}. Checkout requests are succeeding.`;
-  } else if (inc.status === "verifying") {
-    spokenSummary = `Mitigation was applied for incident ${incidentId}; verification checks and telemetry confirmation are currently in progress.`;
-  } else if (inc.status === "mitigating") {
-    spokenSummary = `Mitigation (${latestAction?.action ?? "action"}) is currently being executed for incident ${incidentId}.`;
-  } else if (inc.status === "awaiting_decision") {
-    spokenSummary = latestAction && latestAction.approval_state === "pending"
-      ? `Incident ${incidentId} is awaiting your decision on ${latestAction.action}.`
-      : `Incident ${incidentId} is awaiting engineer action.`;
-  }
-
-  return {
-    incidentId: inc.id,
-    status: inc.status,
-    ackState: inc.ack_state,
-    acknowledgedBy: inc.acknowledged_by,
-    escalationState: inc.escalation_state,
-    owner: inc.owner,
-    autonomy: inc.autonomy,
-    recoveredAt: inc.recovered_at,
-    latestAction: latestAction
-      ? { id: latestAction.id, action: latestAction.action, approvalState: latestAction.approval_state, approvedBy: latestAction.approved_by }
-      : null,
-    recentTimeline: recentTimeline.map((t) => ({
-      at: t.at,
-      actor: t.actor,
-      action: t.action,
-      result: t.result,
-      detail: t.detail ? JSON.parse(t.detail) : null,
-    })),
-    spokenSummary,
   };
 }

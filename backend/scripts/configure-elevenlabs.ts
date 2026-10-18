@@ -38,30 +38,6 @@ const tools = [
   },
   {
     type: "webhook",
-    name: "check_dependency",
-    description:
-      "Run a live read-only dependency health probe against payments or recommendations when the engineer asks to check payments or check recommendations.",
-    interruption_mode: "disable_during_tool_and_turn",
-    api_schema: {
-      url: `${publicUrl}/voice/incidents/{incident_id}/probe`,
-      method: "POST",
-      request_headers: headers,
-      path_params_schema: incidentPathParam,
-      request_body_schema: {
-        type: "object",
-        required: ["dependency"],
-        properties: {
-          dependency: {
-            type: "string",
-            description: "Which dependency to probe live: 'payments' or 'recommendations'",
-            enum: ["payments", "recommendations"],
-          },
-        },
-      },
-    },
-  },
-  {
-    type: "webhook",
     name: "approve_action",
     description:
       "Approve and execute the pending mitigation action after the engineer explicitly confirms they want that exact action for this incident. The action must match the pending proposal you were told about.",
@@ -120,42 +96,6 @@ const tools = [
       },
     },
   },
-  {
-    type: "webhook",
-    name: "take_over",
-    description:
-      "Transfer incident ownership to the human engineer and halt all autonomous actions when the engineer says 'I will handle it' or 'I am taking over'.",
-    interruption_mode: "disable_during_tool_and_turn",
-    api_schema: {
-      url: `${publicUrl}/voice/incidents/{incident_id}/take-over`,
-      method: "POST",
-      request_headers: headers,
-      path_params_schema: incidentPathParam,
-      request_body_schema: {
-        type: "object",
-        required: ["responder"],
-        properties: {
-          responder: {
-            type: "string",
-            dynamic_variable: "responder",
-          },
-        },
-      },
-    },
-  },
-  {
-    type: "webhook",
-    name: "check_status",
-    description:
-      "Check the current incident status, mitigation execution, and recovery verification status when the engineer asks 'Did it work?' or asks for status.",
-    interruption_mode: "disable_during_tool_and_turn",
-    api_schema: {
-      url: `${publicUrl}/voice/incidents/{incident_id}/status`,
-      method: "GET",
-      request_headers: headers,
-      path_params_schema: incidentPathParam,
-    },
-  },
 ];
 
 const prompt = `You are SecondShift, an on-call incident-response voice assistant speaking on a phone call with engineer {{responder}} about incident #{{incident_id}}.
@@ -168,11 +108,8 @@ BEHAVIOR & TONE
 
 HOW TO HANDLE SPOKEN REQUESTS
 1. "Explain the evidence" / "What is happening?" -> Call explain_evidence and summarize the impact, which hypothesis is supported vs contradicted, and the key Sentry/probe evidence.
-2. "Check payments" / "Check recommendations" -> Call check_dependency with dependency="payments" (or "recommendations") and report the live health and latency.
-3. "Approve this action" / "Go ahead" / "Yes, do it" -> Call approve_action with action set to exactly the pending proposed action above, and confirmed=true, then report the result.
-4. "No" / "Don't do that" / "That's wrong" -> Call decline_action with the pending action. Do not ask why. Say nothing was changed and that you will verify recovery once the engineer has made their fix.
-5. "I'll handle it" / "I'm taking over" -> Call take_over to transfer control to {{responder}} and stop autonomous actions. Use decline_action instead if they are rejecting the proposal.
-6. "Did it work?" / "What's the status?" -> Call check_status and report the current incident and verification status.`;
+2. "Approve this action" / "Go ahead" / "Yes, do it" -> Call approve_action with action set to exactly the pending proposed action above, and confirmed=true, then report the result.
+3. "No" / "Don't do that" / "That's wrong" / "I'll handle it" -> Call decline_action with the pending action. Do not ask why. Say nothing was changed and that you will verify recovery once the engineer has made their fix.`;
 
 const payload = {
   conversation_config: {
@@ -191,7 +128,7 @@ const payload = {
           responder: "primary-engineer",
           proposed_action: "disable_recommendations",
           call_briefing:
-            "SecondShift here about incident 1. Checkout requests are failing. Recommendation timeouts are the leading cause. I propose disabling recommendations; purchases could continue without product suggestions. Would you like the evidence, approve this action, or take over?",
+            "SecondShift here about incident 1. Checkout requests are failing. Recommendation timeouts are the leading cause. I propose disabling recommendations; purchases could continue without product suggestions. Would you like the evidence, or shall I approve or decline this action?",
         },
       },
       prompt: {
