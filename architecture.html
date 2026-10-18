@@ -257,7 +257,7 @@
   }
 
   h2 {
-    font-size: clamp(21px, 2.1vw, 27px);
+    font-size: clamp(26px, 2.6vw, 34px);
     font-weight: 700;
     line-height: 1.15;
     letter-spacing: -0.015em;
@@ -267,23 +267,23 @@
 
   .slide-sub {
     font-family: "IBM Plex Mono", ui-monospace, monospace;
-    font-size: 12px;
+    font-size: 13px;
     color: var(--ink-muted);
     text-align: right;
     white-space: nowrap;
   }
 
   h3 {
-    font-size: 16.5px;
+    font-size: clamp(19px, 1.6vw, 22px);
     font-weight: 700;
     line-height: 1.25;
     color: var(--ink);
-    margin-bottom: 8px;
+    margin-bottom: 12px;
   }
 
   p, li {
-    font-size: clamp(14.5px, 1.2vw, 16.5px);
-    line-height: 1.5;
+    font-size: clamp(16.5px, 1.4vw, 19px);
+    line-height: 1.48;
     color: var(--ink-secondary);
   }
 
@@ -307,19 +307,24 @@
   .grid-2 {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 24px;
+    gap: 28px;
+    flex: 1;
   }
 
   .grid-3 {
     display: grid;
     grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: 14px;
+    gap: 16px;
+    flex: 1;
+    align-items: stretch;
   }
 
   .grid-12 {
     display: grid;
     grid-template-columns: repeat(12, minmax(0, 1fr));
-    gap: 24px;
+    gap: 28px;
+    flex: 1;
+    align-items: stretch;
   }
 
   .col-4 { grid-column: span 4; }
@@ -330,23 +335,30 @@
   .col-12 { grid-column: span 12; }
 
   .pane {
-    border-top: 1px solid var(--rule-light);
-    padding-top: 10px;
+    border-top: 2px solid var(--rule-heavy);
+    padding: 18px 20px;
+    background: var(--surface-raised);
+    border-left: 1px solid var(--rule-light);
+    border-right: 1px solid var(--rule-light);
+    border-bottom: 1px solid var(--rule-light);
     min-width: 0;
+    display: flex;
+    flex-direction: column;
   }
 
   .pane-tinted {
     background: var(--surface);
     border-top: 2px solid var(--primary);
-    padding: 12px 15px;
+    padding: 16px 18px;
     min-width: 0;
+    margin-top: auto;
   }
 
   .pane-label {
     font-family: "IBM Plex Mono", ui-monospace, monospace;
-    font-size: 11.5px;
+    font-size: 12.5px;
     color: var(--primary);
-    margin-bottom: 5px;
+    margin-bottom: 6px;
     display: flex;
     align-items: center;
     justify-content: space-between;
@@ -358,23 +370,27 @@
     counter-reset: item;
     display: flex;
     flex-direction: column;
-    gap: 12px;
+    justify-content: space-around;
+    flex: 1;
+    gap: 14px;
   }
 
   .sg-list li {
     counter-increment: item;
     position: relative;
-    padding-left: 28px;
+    padding: 12px 14px 12px 42px;
+    background: var(--surface);
+    border-left: 3px solid var(--primary);
   }
 
   .sg-list li::before {
     content: counter(item, decimal-leading-zero);
     position: absolute;
-    left: 0;
-    top: 3px;
+    left: 12px;
+    top: 14px;
     font-family: "IBM Plex Mono", ui-monospace, monospace;
-    font-size: 12px;
-    font-weight: 600;
+    font-size: 14px;
+    font-weight: 700;
     color: var(--primary);
   }
 
@@ -382,12 +398,12 @@
   .callout-bar {
     margin-top: auto;
     border-top: 1px solid var(--rule-light);
-    padding-top: 9px;
+    padding-top: 10px;
     display: flex;
     align-items: baseline;
     justify-content: space-between;
     gap: 16px;
-    font-size: 13.5px;
+    font-size: 15px;
     color: var(--ink-secondary);
     flex-shrink: 0;
   }
@@ -472,18 +488,19 @@
   .pipeline-stage-grid {
     display: grid;
     grid-template-columns: repeat(5, minmax(0, 1fr));
-    gap: 12px;
+    gap: 14px;
     width: 100%;
+    flex: 1.2;
   }
 
   .pipe-step {
     background: var(--surface-raised);
     border: 1px solid var(--rule-light);
     border-top: 3px solid var(--rule-heavy);
-    padding: 12px 13px 10px;
+    padding: 16px 16px 14px;
     display: flex;
     flex-direction: column;
-    gap: 5px;
+    gap: 8px;
     min-width: 0;
   }
 
@@ -501,7 +518,7 @@
     justify-content: space-between;
     gap: 6px;
     font-family: "IBM Plex Mono", ui-monospace, monospace;
-    font-size: 11px;
+    font-size: 12px;
     white-space: nowrap;
   }
 
@@ -512,27 +529,27 @@
 
   .pipe-actor {
     color: var(--ink-muted);
-    font-size: 10.5px;
+    font-size: 11.5px;
   }
 
   .pipe-title {
-    font-size: 16px;
+    font-size: 19px;
     font-weight: 700;
     color: var(--ink);
   }
 
   .pipe-body {
-    font-size: 13.5px;
-    line-height: 1.42;
+    font-size: 15.5px;
+    line-height: 1.44;
     color: var(--ink-secondary);
   }
 
   .pipe-io {
     margin-top: auto;
-    padding-top: 6px;
+    padding-top: 8px;
     border-top: 1px dashed var(--rule-light);
     font-family: "IBM Plex Mono", ui-monospace, monospace;
-    font-size: 10.5px;
+    font-size: 11.5px;
     color: var(--ink-muted);
   }
 
@@ -540,31 +557,32 @@
   .feedback-band {
     display: grid;
     grid-template-columns: repeat(12, minmax(0, 1fr));
-    gap: 12px;
+    gap: 14px;
     width: 100%;
+    flex: 0.9;
     align-items: stretch;
   }
 
   .loop-card {
     background: var(--surface);
     border: 1px solid var(--rule-light);
-    padding: 12px 15px;
+    padding: 16px 18px;
     display: flex;
     flex-direction: column;
     justify-content: center;
-    gap: 5px;
+    gap: 8px;
     min-width: 0;
   }
 
   .loop-card.loop-highlight {
     background: var(--accent-wash);
     border-color: var(--accent);
-    border-left: 3px solid var(--accent);
+    border-left: 4px solid var(--accent);
   }
 
   .loop-card-head {
     font-family: "IBM Plex Mono", ui-monospace, monospace;
-    font-size: 11.5px;
+    font-size: 13px;
     font-weight: 600;
     color: var(--ink);
     display: flex;
@@ -574,8 +592,8 @@
   }
 
   .loop-card p {
-    font-size: 13.5px;
-    line-height: 1.4;
+    font-size: 15.5px;
+    line-height: 1.42;
     color: var(--ink-secondary);
   }
 
@@ -586,32 +604,33 @@
     width: 100%;
     table-layout: fixed;
     border-collapse: collapse;
-    font-size: 13.5px;
+    font-size: 16px;
+    flex: 1;
   }
 
   .sg-table th {
     font-family: "IBM Plex Mono", ui-monospace, monospace;
-    font-size: 11px;
+    font-size: 12.5px;
     font-weight: 600;
     color: var(--primary);
     text-align: left;
-    padding: 8px 10px;
+    padding: 12px 14px;
     border-top: 1px solid var(--rule-heavy);
     border-bottom: 1px solid var(--rule-light);
     background: var(--surface);
   }
 
   .sg-table td {
-    padding: 10px 10px;
+    padding: 16px 14px;
     border-bottom: 1px solid var(--rule-light);
     color: var(--ink-secondary);
-    vertical-align: top;
-    line-height: 1.4;
+    vertical-align: middle;
+    line-height: 1.42;
     overflow-wrap: break-word;
   }
 
   .sg-table td.mono {
-    font-size: 11.5px;
+    font-size: 14px;
   }
 
   .sg-table tr:last-child td {
@@ -621,9 +640,9 @@
   .badge-mono {
     display: inline-block;
     font-family: "IBM Plex Mono", ui-monospace, monospace;
-    font-size: 10.5px;
+    font-size: 12px;
     font-weight: 600;
-    padding: 2px 6px;
+    padding: 4px 8px;
     border-radius: 2px;
     white-space: nowrap;
   }
@@ -654,26 +673,30 @@
   .metric-rows {
     display: flex;
     flex-direction: column;
+    justify-content: space-around;
+    flex: 1;
   }
 
   .metric-row {
     display: grid;
-    grid-template-columns: 120px minmax(0, 1fr);
+    grid-template-columns: 140px minmax(0, 1fr);
     align-items: center;
-    gap: 16px;
-    padding: 14px 0;
-    border-top: 1px solid var(--rule-light);
+    gap: 18px;
+    padding: 20px 14px;
+    background: var(--surface);
+    border-left: 4px solid var(--accent);
+    margin-bottom: 10px;
   }
 
   .metric-row:last-child {
-    border-bottom: 1px solid var(--rule-light);
+    margin-bottom: 0;
   }
 
   .metric-fig {
     text-align: left;
     white-space: nowrap;
     font-family: "IBM Plex Mono", ui-monospace, monospace;
-    font-size: clamp(24px, 2.3vw, 32px);
+    font-size: clamp(32px, 3vw, 42px);
     font-weight: 700;
     line-height: 1;
     color: var(--accent);
@@ -684,19 +707,19 @@
     min-width: 0;
     display: flex;
     flex-direction: column;
-    gap: 2px;
+    gap: 4px;
   }
 
   .metric-desc strong {
     display: block;
-    font-size: 15px;
+    font-size: 18px;
     line-height: 1.25;
     color: var(--ink);
   }
 
   .metric-desc span {
-    font-size: 13.5px;
-    line-height: 1.35;
+    font-size: 15.5px;
+    line-height: 1.38;
     color: var(--ink-secondary);
   }
 
@@ -789,7 +812,7 @@
       <div class="cover-wrap">
         <div class="cover-meta">
           <span>system architecture // midnight commander</span>
-          <span>sentry + creao + photon + elevenlabs</span>
+          <span>creao + sentry + photon + elevenlabs + cognition (devin)</span>
         </div>
 
         <div class="cover-hero">
@@ -826,12 +849,229 @@
     </section>
 
     <!-- ====================================================================
-         SLIDE 02: END-TO-END PIPELINE & UNIFIED LEARNING LOOP
+         SLIDE 02: VISUAL ARCHITECTURE DIAGRAM (LOGOS & ARROWS)
+         ==================================================================== -->
+    <section class="slide" data-title="Architecture Diagram" data-sub="CREAO Mastermind + Sentry + Photon + ElevenLabs + Cognition (Devin)">
+      <div class="slide-head">
+        <div class="slide-head-main">
+          <span class="kicker">01 // system topology</span>
+          <h2>Visual architecture — CREAO as the central mastermind</h2>
+        </div>
+        <span class="slide-sub">few words &middot; clear arrows &middot; full sponsor stack</span>
+      </div>
+
+      <!-- Visual Hub-and-Spoke Layout (Zero Overlap) -->
+      <div style="flex: 1; display: flex; flex-direction: column; justify-content: space-between; gap: 12px; min-height: 0;">
+
+        <!-- Main 5-Column Topology Grid: [Left Cards] [Left Arrows] [CREAO Center] [Right Arrows] [Right Cards] -->
+        <div style="flex: 1; display: grid; grid-template-columns: 1fr 136px 1.22fr 142px 1fr; grid-template-rows: 1fr 32px 1fr; gap: 0; align-items: stretch; min-height: 0;">
+
+          <!-- TOP-LEFT (Col 1, Row 1): SENTRY -->
+          <div class="pipe-step" style="grid-column: 1; grid-row: 1; border-top: 3px solid #6c5fc7; padding: 14px 16px; justify-content: center;">
+            <div style="display: flex; align-items: center; gap: 12px;">
+              <div style="width: 40px; height: 40px; border-radius: 8px; background: #362d59; display: grid; place-items: center; flex-shrink: 0;">
+                <svg width="24" height="22" viewBox="0 0 72 66" fill="none">
+                  <path d="M29,2.26a4.67,4.67,0,0,0-8,0L14.42,13.53A32.21,32.21,0,0,1,32.17,40.19H27.55A27.68,27.68,0,0,0,12.09,17.47L6,28a15.92,15.92,0,0,1,9.23,12.17H4.62A.76.76,0,0,1,4,39.06l2.94-5a10.74,10.74,0,0,0-3.36-1.9l-2.91,5a4.54,4.54,0,0,0,1.69,6.24A4.66,4.66,0,0,0,4.62,44H19.15a19.4,19.4,0,0,0-8-17.31l2.31-4A23.87,23.87,0,0,1,23.76,44H36.07a35.88,35.88,0,0,0-16.41-31.8l4.67-8a.77.77,0,0,1,1.05-.27c.53.29,20.29,34.77,20.66,35.17a.76.76,0,0,1-.68,1.13H40.6q.09,1.91,0,3.81h4.78A4.59,4.59,0,0,0,50,39.43a4.49,4.49,0,0,0-.62-2.28Z" transform="translate(11 11)" fill="#ffffff"/>
+                </svg>
+              </div>
+              <div>
+                <span class="kicker" style="color: #6c5fc7;">01 // observability</span>
+                <div class="pipe-title" style="font-size: 18px;">Sentry</div>
+              </div>
+            </div>
+            <p class="pipe-body" style="margin-top: 6px;">
+              <strong>Errors &middot; Logs &middot; Traces</strong><br>
+              Detects 5xx failures and streams spans + structured logs.
+            </p>
+          </div>
+
+          <!-- ARROW 1 (Col 2, Row 1): Sentry -> CREAO -->
+          <div style="grid-column: 2; grid-row: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 0 6px; gap: 5px;">
+            <span class="badge-mono badge-neutral" style="font-size: 10.5px;">1. alerts + traces</span>
+            <svg width="100%" height="16" viewBox="0 0 120 16" fill="none">
+              <line x1="4" y1="8" x2="108" y2="8" stroke="var(--primary)" stroke-width="2.5"/>
+              <polygon points="104,3 116,8 104,13" fill="var(--primary)"/>
+            </svg>
+          </div>
+
+          <!--BOTTOM-LEFT (Col 1, Row 3): MANIFEST + INCIDENTS.MD -->
+          <div class="pipe-step" style="grid-column: 1; grid-row: 3; border-top: 3px solid var(--accent); padding: 14px 16px; justify-content: center;">
+            <div style="display: flex; align-items: center; gap: 12px;">
+              <div style="width: 40px; height: 40px; border-radius: 8px; background: var(--accent); display: grid; place-items: center; flex-shrink: 0;">
+                <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="#ffffff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                  <polyline points="14 2 14 8 20 8"/>
+                  <line x1="8" y1="13" x2="16" y2="13"/>
+                  <line x1="8" y1="17" x2="16" y2="17"/>
+                </svg>
+              </div>
+              <div>
+                <span class="kicker" style="color: var(--accent);">02 // config &amp; memory</span>
+                <div class="pipe-title" style="font-size: 17px;">Manifest + incidents.md</div>
+              </div>
+            </div>
+            <p class="pipe-body" style="margin-top: 6px;">
+              <strong>Plug-and-Play Config &amp; Past Fixes</strong><br>
+              Health probes + SQLite / Markdown log of what fixed past outages.
+            </p>
+          </div>
+
+          <!-- ARROW 2 (Col 2, Row 3): Manifest/Memory <-> CREAO -->
+          <div style="grid-column: 2; grid-row: 3; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 0 6px; gap: 5px;">
+            <span class="badge-mono badge-ok" style="font-size: 10.5px;">2. probes + memory</span>
+            <svg width="100%" height="16" viewBox="0 0 120 16" fill="none">
+              <line x1="12" y1="8" x2="108" y2="8" stroke="var(--accent)" stroke-width="2.5"/>
+              <polygon points="16,3 4,8 16,13" fill="var(--accent)"/>
+              <polygon points="104,3 116,8 104,13" fill="var(--accent)"/>
+            </svg>
+          </div>
+
+          <!-- CENTER (Col 3, Rows 1..3): CREAO MASTERMIND -->
+          <div class="pipe-step" style="grid-column: 3; grid-row: 1 / span 3; border: 2px solid var(--primary); border-top: 5px solid var(--primary); padding: 18px 20px; background: var(--surface-raised); box-shadow: 0 8px 28px rgba(29, 78, 216, 0.09); justify-content: space-between;">
+            <div style="display: flex; align-items: center; justify-content: space-between; gap: 10px;">
+              <div style="display: flex; align-items: center; gap: 12px;">
+                <div style="width: 46px; height: 46px; border-radius: 10px; background: var(--primary); display: grid; place-items: center; flex-shrink: 0;">
+                  <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#ffffff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                    <circle cx="12" cy="12" r="3"/>
+                    <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/>
+                  </svg>
+                </div>
+                <div>
+                  <span class="kicker">center mastermind // investigator</span>
+                  <div class="pipe-title" style="font-size: 22px;">CREAO Agent</div>
+                </div>
+              </div>
+              <span class="badge-mono badge-neutral">plug &amp; play</span>
+            </div>
+
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin: 10px 0;">
+              <div style="background: var(--surface); padding: 8px 10px; border-left: 3px solid var(--primary);">
+                <div class="mono" style="font-size: 11px; font-weight: 600; color: var(--primary);">1. READ MANIFEST</div>
+                <div style="font-size: 12.5px; color: var(--ink-secondary); margin-top: 2px;">Loads <code>service-manifest.json</code></div>
+              </div>
+              <div style="background: var(--surface); padding: 8px 10px; border-left: 3px solid var(--primary);">
+                <div class="mono" style="font-size: 11px; font-weight: 600; color: var(--primary);">2. PROBE LIVE</div>
+                <div style="font-size: 12.5px; color: var(--ink-secondary); margin-top: 2px;">Tests dependencies directly</div>
+              </div>
+              <div style="background: var(--surface); padding: 8px 10px; border-left: 3px solid var(--accent);">
+                <div class="mono" style="font-size: 11px; font-weight: 600; color: var(--accent);">3. CHECK MEMORY</div>
+                <div style="font-size: 12.5px; color: var(--ink-secondary); margin-top: 2px;">Matches <code>incidents.md</code></div>
+              </div>
+              <div style="background: var(--surface); padding: 8px 10px; border-left: 3px solid var(--warn);">
+                <div class="mono" style="font-size: 11px; font-weight: 600; color: var(--warn);">4. PROPOSE FIX</div>
+                <div style="font-size: 12.5px; color: var(--ink-secondary); margin-top: 2px;">Checked by Backend Gate</div>
+              </div>
+            </div>
+
+            <div class="pipe-io" style="font-size: 11.5px; color: var(--ink);">
+              <strong>Output:</strong> Root cause + bounded fix + spoken phone briefing
+            </div>
+          </div>
+
+          <!-- ARROW 3 (Col 4, Row 1): CREAO -> ElevenLabs + Photon -->
+          <div style="grid-column: 4; grid-row: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 0 6px; gap: 5px;">
+            <span class="badge-mono badge-warn" style="font-size: 10.5px;">3. briefing + fix</span>
+            <svg width="100%" height="16" viewBox="0 0 120 16" fill="none">
+              <line x1="4" y1="8" x2="108" y2="8" stroke="var(--warn)" stroke-width="2.5"/>
+              <polygon points="104,3 116,8 104,13" fill="var(--warn)"/>
+            </svg>
+          </div>
+
+          <!-- TOP-RIGHT (Col 5, Row 1): PHOTON + ELEVENLABS -->
+          <div class="pipe-step" style="grid-column: 5; grid-row: 1; border-top: 3px solid var(--warn); padding: 14px 16px; justify-content: center;">
+            <div style="display: flex; align-items: center; gap: 9px;">
+              <div style="width: 38px; height: 38px; border-radius: 8px; background: #111827; display: grid; place-items: center; flex-shrink: 0;">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="#ffffff">
+                  <rect x="6" y="3" width="4" height="18" rx="1"/>
+                  <rect x="14" y="3" width="4" height="18" rx="1"/>
+                </svg>
+              </div>
+              <div style="width: 38px; height: 38px; border-radius: 8px; background: #b45309; display: grid; place-items: center; flex-shrink: 0;">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#ffffff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/>
+                </svg>
+              </div>
+              <div>
+                <span class="kicker" style="color: var(--warn);">03 // voice &amp; sip call</span>
+                <div class="pipe-title" style="font-size: 16.5px;">ElevenLabs + Photon</div>
+              </div>
+            </div>
+            <p class="pipe-body" style="margin-top: 6px;">
+              <strong>Real Phone Call to Engineer</strong><br>
+              Speaks briefing &rarr; Engineer says <code>"Approve"</code> or <code>"Decline"</code> from bed.
+            </p>
+          </div>
+
+          <!-- ARROW 4 (Col 5, Row 2): Phone Call -> Execute & Verify -->
+          <div style="grid-column: 5; grid-row: 2; display: flex; align-items: center; justify-content: center; gap: 8px;">
+            <svg width="16" height="26" viewBox="0 0 16 26" fill="none">
+              <line x1="8" y1="2" x2="8" y2="18" stroke="var(--accent)" stroke-width="2.5"/>
+              <polygon points="3,16 8,25 13,16" fill="var(--accent)"/>
+            </svg>
+            <span class="badge-mono badge-ok" style="font-size: 10.5px;">4. "Approve" / "Decline"</span>
+          </div>
+
+          <!-- ARROW 5 (Col 4, Row 3): Execute & Verify -> CREAO / Memory -->
+          <div style="grid-column: 4; grid-row: 3; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 0 6px; gap: 5px;">
+            <span class="badge-mono badge-neutral" style="font-size: 10.5px;">5. saves lesson</span>
+            <svg width="100%" height="16" viewBox="0 0 120 16" fill="none">
+              <line x1="12" y1="8" x2="116" y2="8" stroke="var(--primary)" stroke-width="2.2" stroke-dasharray="5 3"/>
+              <polygon points="16,3 4,8 16,13" fill="var(--primary)"/>
+            </svg>
+          </div>
+
+          <!-- BOTTOM-RIGHT (Col 5, Row 3): EXECUTION & VERIFICATION -->
+          <div class="pipe-step" style="grid-column: 5; grid-row: 3; border-top: 3px solid var(--accent); padding: 14px 16px; justify-content: center;">
+            <div style="display: flex; align-items: center; gap: 12px;">
+              <div style="width: 40px; height: 40px; border-radius: 8px; background: #0f766e; display: grid; place-items: center; flex-shrink: 0;">
+                <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="#ffffff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/>
+                  <polyline points="22 4 12 14.01 9 11.01"/>
+                </svg>
+              </div>
+              <div>
+                <span class="kicker" style="color: var(--accent);">04 // act &amp; verify</span>
+                <div class="pipe-title" style="font-size: 16.5px;">Execute &amp; Prove Recovery</div>
+              </div>
+            </div>
+            <p class="pipe-body" style="margin-top: 6px;">
+              <strong>Runs Fix (or Watches Manual Fix)</strong><br>
+              Confirms 10 passing checkouts (30s) + 10 clean Sentry traces.
+            </p>
+          </div>
+
+        </div>
+
+        <!-- BOTTOM FOUNDATION BAR: COGNITION / DEVIN -->
+        <div style="background: var(--surface-raised); border: 1.5px solid var(--rule-heavy); padding: 11px 18px; display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-shrink: 0;">
+          <div style="display: flex; align-items: center; gap: 14px;">
+            <div style="width: 36px; height: 36px; border-radius: 8px; background: var(--ink); display: grid; place-items: center; flex-shrink: 0;">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--bg)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <polygon points="12 2 21 7 21 17 12 22 3 17 3 7 12 2"/>
+                <polyline points="3 7 12 12 21 7"/>
+                <line x1="12" y1="22" x2="12" y2="12"/>
+              </svg>
+            </div>
+            <div>
+              <span class="mono" style="font-size: 11px; font-weight: 600; color: var(--primary); text-transform: uppercase;">overall ai software engineer // cognition</span>
+              <div style="font-size: 15.5px; font-weight: 700; color: var(--ink);">Built, Tested &amp; Tuned End-to-End with Devin (Cognition)</div>
+            </div>
+          </div>
+          <div class="mono" style="font-size: 12px; color: var(--ink-secondary); text-align: right;">
+            138 automated checks &middot; SIP/VAD trace debugging &middot; plug-and-play manifest engine
+          </div>
+        </div>
+
+      </div>
+    </section>
+
+    <!-- ====================================================================
+         SLIDE 03: END-TO-END PIPELINE & UNIFIED LEARNING LOOP
          ==================================================================== -->
     <section class="slide" data-title="End-to-End Flow" data-sub="How SecondShift runs across any service from alert to memory">
       <div class="slide-head">
         <div class="slide-head-main">
-          <span class="kicker">01 // system flow</span>
+          <span class="kicker">02 // system flow</span>
           <h2>One pipeline that adapts to any service</h2>
         </div>
         <span class="slide-sub">5 steps forward &middot; 1 learning loop back</span>
@@ -937,12 +1177,12 @@
     </section>
 
     <!-- ====================================================================
-         SLIDE 03: PLUG-AND-PLAY ONBOARDING & DEEP DIAGNOSIS
+         SLIDE 04: PLUG-AND-PLAY ONBOARDING & DEEP DIAGNOSIS
          ==================================================================== -->
     <section class="slide" data-title="Plug-and-Play Setup" data-sub="Onboarding any software service in 4 steps and separating symptoms from root causes">
       <div class="slide-head">
         <div class="slide-head-main">
-          <span class="kicker">02 // onboarding &amp; investigation</span>
+          <span class="kicker">03 // onboarding &amp; investigation</span>
           <h2>Plug-and-play for any service in 4 steps</h2>
         </div>
         <span class="slide-sub">manifest-driven &middot; no custom agent code required</span>
@@ -955,11 +1195,11 @@
             <span>4-step onboarding</span>
           </div>
           <h3>From zero to live responder</h3>
-          <ul class="sg-list" style="margin-top: 10px;">
-            <li><strong>Write <code>service-manifest.json</code>:</strong> Declare your service's dependencies, health probes, and safe fix endpoints.</li>
-            <li><strong>Attach to CREAO:</strong> Clone the investigator agent and upload your manifest file.</li>
-            <li><strong>Add API keys:</strong> Point Sentry, CREAO, Photon, and your app URLs in <code>.env</code>.</li>
-            <li><strong>Provision voice in 1 command:</strong> Run <code>npm run configure:voice</code> to auto-configure the phone agent.</li>
+          <ul class="sg-list" style="margin-top: 6px;">
+            <li><strong>1. <code>service-manifest.json</code></strong> — Declare probes &amp; safe fix endpoints.</li>
+            <li><strong>2. Attach to CREAO</strong> — Clone agent template &amp; upload manifest.</li>
+            <li><strong>3. Set <code>.env</code> Keys</strong> — Connect Sentry, CREAO &amp; Photon SIP.</li>
+            <li><strong>4. <code>npm run configure:voice</code></strong> — Auto-builds phone agent tools.</li>
           </ul>
         </div>
 
@@ -968,34 +1208,34 @@
             <span>why manifest probes beat logs alone</span>
             <span>surface symptom &ne; root cause</span>
           </div>
-          <h3>How live probes diagnose any architecture</h3>
-          <table class="sg-table" style="margin-top: 10px;">
+          <h3>How live probes separate symptoms from root causes</h3>
+          <table class="sg-table" style="margin-top: 6px;">
             <thead>
               <tr>
                 <th style="width: 24%;">Outage Type</th>
-                <th style="width: 25%;">What Logs Show</th>
-                <th style="width: 25%;">What Probes Show</th>
+                <th style="width: 25%;">Sentry Logs</th>
+                <th style="width: 25%;">Live Probes</th>
                 <th style="width: 26%;">Action Taken</th>
               </tr>
             </thead>
             <tbody>
               <tr>
-                <td><strong>Feature Down</strong></td>
-                <td>Feature A times out</td>
-                <td><span class="badge-mono badge-ok">Core APIs fast</span></td>
-                <td>Disable non-critical feature</td>
+                <td><strong>Feature Outage</strong></td>
+                <td>Recs 504 timeout</td>
+                <td><span class="badge-mono badge-ok">Payments 60ms</span></td>
+                <td><strong>Disable recs flag</strong></td>
               </tr>
               <tr>
-                <td><strong>Shared Bottleneck</strong></td>
-                <td>Feature A times out</td>
-                <td><span class="badge-mono badge-warn">Provider slow</span></td>
-                <td>Fail over to backup provider</td>
+                <td><strong>Shared Pool Slow</strong></td>
+                <td>Recs 504 timeout</td>
+                <td><span class="badge-mono badge-warn">Payments 1800ms</span></td>
+                <td><strong>Switch payment provider</strong></td>
               </tr>
               <tr>
-                <td><strong>Core Outage</strong></td>
-                <td>Hard 5xx errors</td>
-                <td><span class="badge-mono badge-danger">Core failing</span></td>
-                <td><em>Escalate to engineer</em></td>
+                <td><strong>Hard Payment Down</strong></td>
+                <td>Payment 502 error</td>
+                <td><span class="badge-mono badge-danger">Payments failing</span></td>
+                <td><em>Escalate (no auto-fix)</em></td>
               </tr>
             </tbody>
           </table>
@@ -1006,7 +1246,7 @@
               <span class="mono">shared pools &amp; queues</span>
             </div>
             <p>
-              When services share connection pools or rate limits, a slow upstream provider makes unrelated features time out first. Probing each dependency directly stops the AI from fixing the wrong thing.
+              A slow payment provider saturates the shared connection pool and makes recommendations time out first. Live probes catch the <code>1800ms</code> payment lag that logs miss.
             </p>
           </div>
         </div>
@@ -1019,12 +1259,12 @@
     </section>
 
     <!-- ====================================================================
-         SLIDE 04: SAFETY GUARDRAILS & VOICE INTERACTION
+         SLIDE 05: SAFETY GUARDRAILS & VOICE INTERACTION
          ==================================================================== -->
     <section class="slide" data-title="Safety Gates & Voice Call" data-sub="Manifest-enforced safety checks and auto-provisioned voice tools">
       <div class="slide-head">
         <div class="slide-head-main">
-          <span class="kicker">03 // guardrails &amp; voice</span>
+          <span class="kicker">04 // guardrails &amp; voice</span>
           <h2>Double safety checks &amp; auto-configured voice calls</h2>
         </div>
         <span class="slide-sub">AI proposes &middot; backend checks twice &middot; human decides</span>
@@ -1112,12 +1352,12 @@
     </section>
 
     <!-- ====================================================================
-         SLIDE 05: VERIFICATION & UNIFIED MEMORY
+         SLIDE 06: VERIFICATION & UNIFIED MEMORY
          ==================================================================== -->
     <section class="slide" data-title="Recovery & Learning" data-sub="How we verify real recovery and learn from your engineering team">
       <div class="slide-head">
         <div class="slide-head-main">
-          <span class="kicker">04 // verification &amp; memory</span>
+          <span class="kicker">05 // verification &amp; memory</span>
           <h2>Proving recovery &amp; learning from your team</h2>
         </div>
         <span class="slide-sub">never assume a fix worked &middot; measure it</span>
@@ -1164,11 +1404,11 @@
             <span>database + incidents.md + runbooks</span>
           </div>
           <h3>Turning human decisions into memory</h3>
-          <ul class="sg-list" style="margin-top: 10px;">
-            <li><strong>Snapshot on "No":</strong> Saves live probe readings whenever an engineer declines a proposal.</li>
-            <li><strong>Watch manual fixes:</strong> Polls your service config to detect what the engineer changed instead.</li>
-            <li><strong>Update logbook:</strong> Writes root cause, fix, and follow-up work to <code>incidents.md</code>.</li>
-            <li><strong>Draft runbooks:</strong> Turns proven fixes into reusable runbooks tested against safety cases.</li>
+          <ul class="sg-list" style="margin-top: 6px;">
+            <li><strong>Snapshot every decision</strong> — Saves live probe latencies on Approve or Decline.</li>
+            <li><strong>Auto-detect manual fixes</strong> — Polls <code>/config</code> to see what the engineer changed.</li>
+            <li><strong>Sync <code>incidents.md</code></strong> — Logs symptom, probe snapshot &amp; verified fix.</li>
+            <li><strong>Draft &amp; test runbooks</strong> — Evaluates against 12 fixed &amp; held-out refusal cases.</li>
           </ul>
         </div>
       </div>
@@ -1180,12 +1420,12 @@
     </section>
 
     <!-- ====================================================================
-         SLIDE 06: PERMISSIONS & REAL-WORLD SCENARIOS
+         SLIDE 07: PERMISSIONS & REAL-WORLD SCENARIOS
          ==================================================================== -->
     <section class="slide" data-title="Permissions & Growth" data-sub="Strict access boundaries and how SecondShift gets smarter on any service">
       <div class="slide-head">
         <div class="slide-head-main">
-          <span class="kicker">05 // access &amp; maturity</span>
+          <span class="kicker">06 // access &amp; maturity</span>
           <h2>Strict permissions &amp; how your service matures</h2>
         </div>
         <span class="slide-sub">separated access &middot; 3 stages of learning</span>
@@ -1199,7 +1439,7 @@
             <span>separated keys</span>
           </div>
           <h3>Who can do what</h3>
-          <table class="sg-table" style="margin-top: 10px;">
+          <table class="sg-table" style="margin-top: 6px;">
             <thead>
               <tr>
                 <th>Component</th>
@@ -1211,12 +1451,12 @@
               <tr>
                 <td><strong>CREAO Agent</strong></td>
                 <td>Read manifest, logs, probes, memory</td>
-                <td>Change service settings</td>
+                <td>Mutate app state</td>
               </tr>
               <tr>
                 <td><strong>Voice Agent</strong></td>
-                <td>Brief engineer, relay decision</td>
-                <td>Act without confirmation</td>
+                <td>Brief engineer, relay Approve/Decline</td>
+                <td>Act unconfirmed</td>
               </tr>
               <tr>
                 <td><strong>Backend</strong></td>
@@ -1225,8 +1465,8 @@
               </tr>
               <tr>
                 <td><strong>Engineers</strong></td>
-                <td>Approve fixes &amp; enable runbooks</td>
-                <td>Backup blocked until escalated</td>
+                <td>Approve fixes &amp; authorise runbooks</td>
+                <td>Bypass verification</td>
               </tr>
             </tbody>
           </table>
@@ -1240,35 +1480,35 @@
           </div>
           <h3>Three stages across repeated incidents</h3>
 
-          <div class="grid-3" style="margin-top: 10px;">
-            <div class="pipe-step" style="border-top-color: var(--warn);">
+          <div class="grid-3" style="margin-top: 6px;">
+            <div class="pipe-step" style="border-top-color: var(--warn); background: var(--surface);">
               <div class="pipe-step-head">
                 <span class="pipe-num">stage 01</span>
                 <span class="badge-mono badge-warn">decline</span>
               </div>
               <div class="pipe-title">Learn from "No"</div>
-              <p class="pipe-body">A misleading error triggers the wrong proposal. Your engineer declines and applies a manual fix. SecondShift watches and remembers.</p>
-              <div class="pipe-io">saved to memory</div>
+              <p class="pipe-body">Misleading timeout triggers wrong proposal. Engineer declines on phone &amp; switches provider manually. SecondShift detects &amp; remembers.</p>
+              <div class="pipe-io">saved to incidents.md</div>
             </div>
 
-            <div class="pipe-step" style="border-top-color: var(--primary);">
+            <div class="pipe-step" style="border-top-color: var(--primary); background: var(--surface);">
               <div class="pipe-step-head">
                 <span class="pipe-num">stage 02</span>
                 <span class="badge-mono badge-neutral">learned</span>
               </div>
               <div class="pipe-title">Smarter Next Time</div>
-              <p class="pipe-body">The same outage pattern returns. CREAO matches live probes to Stage 01's snapshot and proposes the right fix immediately.</p>
-              <div class="pipe-io">right fix proposed</div>
+              <p class="pipe-body">Same masked outage returns. CREAO matches the <code>1800ms</code> payment probe to Stage 01 and proposes <code>switch_payment_provider</code>.</p>
+              <div class="pipe-io">1-word phone approval</div>
             </div>
 
-            <div class="pipe-step" style="border-top-color: var(--accent);">
+            <div class="pipe-step" style="border-top-color: var(--accent); background: var(--surface);">
               <div class="pipe-step-head">
                 <span class="pipe-num">stage 03</span>
                 <span class="badge-mono badge-ok">auto-run</span>
               </div>
               <div class="pipe-title">Hands-Free Fix</div>
-              <p class="pipe-body">A verified fix becomes a tested runbook. Once approved by your lead engineer, future occurrences resolve automatically.</p>
-              <div class="pipe-io">resolved automatically</div>
+              <p class="pipe-body">Verified fix becomes an evaluated runbook. Once authorised by lead engineer, future recurrences resolve automatically.</p>
+              <div class="pipe-io">zero human wake-ups</div>
             </div>
           </div>
         </div>
@@ -1286,7 +1526,7 @@
   <footer class="deck-bottombar">
     <div class="bottom-left">
       <span class="folio-num" id="folio-num">01</span>
-      <span id="folio-total"> / 06</span>
+      <span id="folio-total"> / 07</span>
       <span style="margin-left: 12px;" id="folio-caption">Cover — SecondShift</span>
     </div>
     <div class="progress-dots" id="progress-dots"></div>
@@ -1299,7 +1539,7 @@
   <div class="slide-head">
     <div class="slide-head-main">
       <span class="kicker">index // contact sheet</span>
-      <h2>All slides (6)</h2>
+      <h2>All slides (7)</h2>
     </div>
     <button class="ctrl-btn" id="btn-close-grid">[ESC] close</button>
   </div>

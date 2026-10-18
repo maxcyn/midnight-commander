@@ -33,6 +33,7 @@ const dashboardAuth = (req: Request, res: Response, next: NextFunction) => {
 
 app.get("/", (_req, res) => res.redirect("/dashboard"));
 app.get("/dashboard", (_req, res) => res.sendFile(fileURLToPath(new URL("../public/index.html", import.meta.url))));
+app.get("/architecture", (_req, res) => res.sendFile(fileURLToPath(new URL("../../architecture.html", import.meta.url))));
 app.get("/dashboard-api/responders", (req, res) => {
   const token = process.env.DASHBOARD_TOKEN;
   if (!token) return res.status(503).json({ error: "DASHBOARD_TOKEN is not configured" });
