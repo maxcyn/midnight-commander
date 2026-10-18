@@ -144,6 +144,7 @@ const payload = {
     },
     tts: {
       expressive_mode: false,
+      speed: 1.2,
     },
     agent: {
       first_message: "{{call_briefing}}",
