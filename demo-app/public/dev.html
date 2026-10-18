@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Checkout · Test controls</title>
+  <style>
+    body{font:15px/1.5 system-ui,sans-serif;max-width:620px;margin:42px auto;padding:0 18px;color:#17212b}h1{margin-bottom:4px}p{color:#536273}.card{border:1px solid #d7dee5;border-radius:10px;padding:16px;margin:16px 0}.row{display:flex;justify-content:space-between;align-items:center;gap:18px;margin:10px 0}button,input{font:inherit;padding:9px;border:1px solid #bbc6d1;border-radius:7px}button{background:#eff4f7;cursor:pointer}button:hover{background:#e0ebf0}.danger{color:#8b1f2a}.status{white-space:pre-wrap;background:#f1f4f6;padding:12px;border-radius:8px;min-height:42px}a{color:#176b59}
+  </style>
+</head>
+<body>
+  <p><a href="/">← Back to checkout</a></p>
+  <h1>Test controls</h1>
+  <p>Private fault-injection controls for the demo runner. Keep this token separate from the investigator's read-only credentials.</p>
+  <form id="connect"><label>Development token <input id="token" type="password" autocomplete="off" required></label> <button>Connect</button></form>
+  <section class="card">
+    <div class="row"><label><input type="checkbox" id="recommendationsEnabled"> Recommendations feature enabled</label></div>
+    <div class="row"><label><input type="checkbox" id="recommendation"> Recommendation lookup times out</label></div>
+    <div class="row"><label><input type="checkbox" id="payment"> Payment provider fails</label></div>
+    <button id="save">Apply fault controls</button>
+    <button id="reset" class="danger">Reset test state</button>
+  </section>
+  <div id="status" class="status" role="status">Connect with the test-runner token.</div>
+<script>
+(() => {
+  const $ = (id) => document.getElementById(id);
+  const saved = sessionStorage.getItem("secondshift.devToken");
+  if (saved) $("token").value = saved;
+  function report(message) { $("status").textContent = message; }
+  async function api(path, body = {}) {
+    const response = await fetch(path, {
+      method: "POST",
+      headers: { authorization: `Bearer ${$("token").value}`, "content-type": "application/json" },
+      body: JSON.stringify(body)
+    });
+    const result = await response.json();
+    if (!response.ok) throw new Error(result.error || `Request failed (${response.status})`);
+    return result;
+  }
+  async function refresh() {
+    const response = await fetch("/dev/state", { headers: { authorization: `Bearer ${$("token").value}` } });
+    const state = await response.json();
+    if (!response.ok) throw new Error(state.error || `Request failed (${response.status})`);
+    $("recommendation").checked = state.faults.recommendation;
+    $("payment").checked = state.faults.payment;
+    $("recommendationsEnabled").checked = state.recommendationsEnabled;
+    report(`Connected · recommendation fault ${state.faults.recommendation ? "on" : "off"} · payment fault ${state.faults.payment ? "on" : "off"}`);
+  }
+  $("connect").addEventListener("submit", (event) => {
+    event.preventDefault();
+    sessionStorage.setItem("secondshift.devToken", $("token").value);
+    refresh().catch((error) => report(error.message));
+  });
+  $("save").addEventListener("click", async () => {
+    try {
+      await api("/dev/recommendations", { enabled: $("recommendationsEnabled").checked });
+      await api("/dev/faults", { recommendation: $("recommendation").checked, payment: $("payment").checked });
+      await refresh();
+    }
+    catch (error) { report(error.message); }
+  });
+  $("reset").addEventListener("click", async () => {
+    try { await api("/dev/reset"); await refresh(); }
+    catch (error) { report(error.message); }
+  });
+  if (saved) refresh().catch((error) => report(error.message));
+})();
+</script>
+</body>
+</html>

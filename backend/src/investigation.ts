@@ -1,6 +1,8 @@
 import { db } from "./db.js";
 import { startRun } from "./creao.js";
 import { addEvidence, addTimeline, getIncident, transition } from "./incidents.js";
+import { reportBackendError } from "./monitoring.js";
+import { notifyResponder } from "./workflows.js";
 
 const now = () => new Date().toISOString();
 const BUDGET_MS = Number(process.env.INVESTIGATION_BUDGET_MS ?? 180_000);
@@ -34,15 +36,37 @@ export function validateResult(x: any): { ok: true; value: InvestigationResult }
   if (!x || typeof x !== "object") return { ok: false, errors: ["body must be a JSON object"] };
   if (x.incident_id === undefined) errors.push("incident_id missing");
   if (typeof x.impact?.summary !== "string") errors.push("impact.summary missing");
+  if (!Array.isArray(x.impact?.measured_from) || x.impact.measured_from.length === 0 ||
+      x.impact.measured_from.some((id: unknown) => typeof id !== "string")) {
+    errors.push("impact.measured_from must be a non-empty array of evidence source ids");
+  }
   if (!Array.isArray(x.hypotheses) || x.hypotheses.length === 0) errors.push("hypotheses must be a non-empty array");
   else x.hypotheses.forEach((h: any, i: number) => {
     if (!CAUSES.includes(h?.cause)) errors.push(`hypotheses[${i}].cause must be one of ${CAUSES.join("|")}`);
     if (!STATUSES.includes(h?.status)) errors.push(`hypotheses[${i}].status must be one of ${STATUSES.join("|")}`);
+    for (const key of ["supporting_evidence", "conflicting_evidence"]) {
+      if (h?.[key] !== undefined && !Array.isArray(h[key])) errors.push(`hypotheses[${i}].${key} must be an array`);
+      else for (const item of h?.[key] ?? []) {
+        if (!item || typeof item !== "object" || typeof item.source_id !== "string" ||
+            typeof item.source !== "string" || typeof item.observed_at !== "string") {
+          errors.push(`hypotheses[${i}].${key} entries must include source, source_id, and observed_at`);
+        }
+      }
+    }
   });
-  if (!Array.isArray(x.missing_information)) errors.push("missing_information must be an array");
+  if (!Array.isArray(x.missing_information) || x.missing_information.some((item: unknown) => typeof item !== "string")) errors.push("missing_information must be an array of strings");
   if (!RECOMMENDATIONS.includes(x.recommendation)) errors.push(`recommendation must be one of ${RECOMMENDATIONS.join("|")}`);
   if (typeof x.call_briefing !== "string" || !x.call_briefing.trim()) errors.push("call_briefing missing");
-  if (x.proposed_action != null && typeof x.proposed_action.action !== "string") errors.push("proposed_action.action missing");
+  if (x.applicable_runbook !== null && x.applicable_runbook !== undefined &&
+      (typeof x.applicable_runbook.id !== "string" || !Number.isFinite(Number(x.applicable_runbook.version)) ||
+       typeof x.applicable_runbook.preconditions_met !== "boolean")) {
+    errors.push("applicable_runbook must include id, numeric version, and preconditions_met");
+  }
+  if (x.proposed_action != null &&
+      (typeof x.proposed_action.action !== "string" || typeof x.proposed_action.target_environment !== "string" ||
+       !x.proposed_action.target_environment.trim())) {
+    errors.push("proposed_action must include action and target_environment");
+  }
   return errors.length ? { ok: false, errors } : { ok: true, value: x as InvestigationResult };
 }
 
@@ -61,6 +85,9 @@ export function decide(r: InvestigationResult, authorisedRunbook: boolean): Deci
 
   // Never more permissive than the agent itself asked for.
   if (r.recommendation === "escalate_without_action") return escalate("agent recommended escalation");
+  if (r.missing_information.length > 0) {
+    return escalate(`investigation reports missing information (${r.missing_information.join("; ")})`);
+  }
   if (supported.length === 0) return escalate("no hypothesis is supported by evidence");
   if (supported.length > 1) return escalate(`multiple causes supported (${supported.map((h) => h.cause).join(", ")}); one mitigation cannot claim full recovery`);
 
@@ -72,6 +99,7 @@ export function decide(r: InvestigationResult, authorisedRunbook: boolean): Deci
   }
   const allowed = ALLOWED_ACTIONS[pa.action];
   if (!allowed) return escalate(`action '${pa.action}' is not on the allowlist`);
+  if (pa.target_environment !== "demo") return escalate(`target environment '${pa.target_environment}' is outside the demo allowlist`);
   if (allowed.addresses !== cause) return escalate(`action '${pa.action}' addresses ${allowed.addresses}, but the supported cause is ${cause}`);
 
   if (r.recommendation === "permit_runbook") {
@@ -101,6 +129,7 @@ export async function startInvestigation(incidentId: number) {
     addTimeline(incidentId, "system", "investigation_started", { runId: run.id, budgetMs: BUDGET_MS });
   } catch (err) {
     addTimeline(incidentId, "system", "investigation_start_failed", { error: String(err) }, "error");
+    void reportBackendError(err, { operation: "creao_investigation_start", incidentId });
     return fallback(incidentId, invId, "failed", "could not start CREAO");
   }
   // Urgent incidents must not wait forever for a diagnosis.
@@ -116,6 +145,13 @@ function fallback(incidentId: number, invId: number, status: "failed" | "timed_o
   const inc = getIncident(incidentId);
   if (inc?.status === "investigating") transition(incidentId, "awaiting_decision", "system", { reason: why });
   addTimeline(incidentId, "system", "engineer_contact_needed", { reason: `investigation ${status}: ${why}`, knownSoFar: "alert only" }, "degraded");
+  if (process.env.PHONE_AUTO_NOTIFY === "true") {
+    try {
+      notifyResponder(incidentId, "primary");
+    } catch (error) {
+      void reportBackendError(error, { operation: "investigation_fallback_notification", incidentId });
+    }
+  }
 }
 
 // Called from the CREAO webhook when a run finishes without a submission having arrived.
@@ -126,15 +162,45 @@ export function onRunFinished(runId: string, status: string) {
   else if (inv.status === "running") addTimeline(inv.incident_id, "creao", "run_completed_without_submission", { runId }, "degraded");
 }
 
-export function submitInvestigation(raw: unknown) {
+export function submitInvestigation(raw: unknown, backendVerifiedRunbook = false) {
   const v = validateResult(raw);
   if (!v.ok) return { accepted: false as const, errors: v.errors };
   const r = v.value;
   const incidentId = Number(r.incident_id);
   const inc = getIncident(incidentId);
   if (!inc) return { accepted: false as const, errors: [`incident ${r.incident_id} not found`] };
+  const sourceById = db.prepare(`SELECT observed_at FROM evidence WHERE incident_id = ? AND source_id = ?`);
+  const sourceByType = db.prepare(`SELECT observed_at FROM evidence WHERE incident_id = ? AND source_id = ? AND source = ?`);
+  const missingSources = new Set<string>();
+  const staleSources = new Set<string>();
+  const citedSourceIds = new Set(r.impact.measured_from);
+  for (const hypothesis of r.hypotheses) {
+    if (hypothesis.status === "supported" && !(hypothesis.supporting_evidence?.length)) {
+      return { accepted: false as const, errors: [`supported hypothesis '${hypothesis.cause}' must cite supporting evidence`] };
+    }
+    for (const item of [...(hypothesis.supporting_evidence ?? []), ...(hypothesis.conflicting_evidence ?? [])]) {
+      const source = sourceByType.get(incidentId, item.source_id, item.source) as { observed_at: string } | undefined;
+      if (!source) missingSources.add(`${item.source}:${item.source_id}`);
+      else citedSourceIds.add(item.source_id);
+    }
+  }
+  for (const sourceId of citedSourceIds) {
+    const source = sourceById.get(incidentId, sourceId) as { observed_at: string } | undefined;
+    if (!source) {
+      missingSources.add(sourceId);
+      continue;
+    }
+    const age = Date.now() - Date.parse(source.observed_at);
+    if (!Number.isFinite(age) || age < -60_000 || age > 15 * 60_000) staleSources.add(sourceId);
+  }
+  if (missingSources.size) {
+    return { accepted: false as const, errors: [`evidence source ids were not retrieved for this incident: ${[...missingSources].join(", ")}`] };
+  }
+  if (staleSources.size) {
+    return { accepted: false as const, errors: [`evidence is missing, future-dated, or older than 15 minutes: ${[...staleSources].join(", ")}`] };
+  }
 
-  const authorised = !!(r.applicable_runbook && db.prepare(
+  const authorised = backendVerifiedRunbook && !!(r.applicable_runbook && db.prepare(
     `SELECT 1 FROM runbook_versions WHERE runbook_id = ? AND version = ? AND lifecycle = 'authorised'`,
   ).get(r.applicable_runbook.id, Number(r.applicable_runbook.version)));
   const decision = decide(r, authorised);
@@ -170,7 +236,13 @@ export function submitInvestigation(raw: unknown) {
     db.prepare(`UPDATE proposed_actions SET approval_state = 'superseded' WHERE incident_id = ? AND approval_state = 'pending'`).run(incidentId);
     const info = db.prepare(
       `INSERT INTO proposed_actions (incident_id, action, target_environment, parameters, expires_at, created_at) VALUES (?,?,?,?,?,?)`,
-    ).run(incidentId, r.proposed_action.action, inc.environment, JSON.stringify(ALLOWED_ACTIONS[r.proposed_action.action].parameters),
+    ).run(incidentId, r.proposed_action.action, inc.environment, JSON.stringify({
+      ...ALLOWED_ACTIONS[r.proposed_action.action].parameters,
+      ...(decision.final === "permit_runbook" && r.applicable_runbook ? {
+        runbook_id: r.applicable_runbook.id,
+        runbook_version: Number(r.applicable_runbook.version),
+      } : {}),
+    }),
       new Date(Date.now() + PROPOSAL_TTL_MS).toISOString(), now());
     proposedActionId = Number(info.lastInsertRowid);
     addTimeline(incidentId, "system", "action_proposed", { actionId: proposedActionId, action: r.proposed_action.action, environment: inc.environment, tradeoff: r.proposed_action.expected_tradeoff });

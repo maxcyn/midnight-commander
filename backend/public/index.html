@@ -1,0 +1,244 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#10151d">
+  <title>SecondShift — Incident desk</title>
+  <style>
+    :root{color-scheme:dark;--bg:#10151d;--panel:#171e28;--panel2:#1d2632;--line:#2a3543;--text:#edf2f7;--muted:#9aa8b8;--teal:#77e0c3;--amber:#ffd27a;--red:#ff8c91;--blue:#9dc6ff}
+    *{box-sizing:border-box}body{margin:0;background:radial-gradient(ellipse at 15% 0,#182837 0,transparent 45%),var(--bg);color:var(--text);font:14px/1.55 Inter,ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif}
+    button,input,select{font:inherit}button{border:1px solid var(--line);background:#243140;color:var(--text);padding:8px 12px;border-radius:8px;cursor:pointer}button:hover{border-color:#698099;background:#2c3a49}button.primary{background:#1c6658;border-color:#318f79}button.danger{background:#692e36;border-color:#91434b}button:disabled{opacity:.45;cursor:not-allowed}
+    .shell{max-width:1440px;margin:auto;padding:28px 30px 60px}.top{display:flex;justify-content:space-between;align-items:center;gap:24px;margin-bottom:22px}.brand{display:flex;gap:14px;align-items:center}.mark{width:42px;height:42px;border-radius:13px;background:linear-gradient(145deg,#80efd1,#26987f);display:grid;place-items:center;color:#10211d;font-size:22px;font-weight:800}.eyebrow{color:var(--teal);font-size:11px;letter-spacing:.16em;text-transform:uppercase}.brand h1{font-size:21px;margin:0}.subtitle{color:var(--muted);margin:3px 0 0}.auth{display:flex;align-items:center;gap:8px;flex-wrap:wrap}.auth input,.auth select{background:var(--panel);border:1px solid var(--line);color:var(--text);padding:8px;border-radius:8px}.auth input{width:190px}
+    .notice{display:none;padding:11px 14px;border:1px solid #684b24;border-radius:9px;background:#352a19;color:#ffe0a8;margin:0 0 16px}.metrics{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin-bottom:16px}.metric,.panel{border:1px solid var(--line);border-radius:12px;background:linear-gradient(145deg,rgba(29,38,50,.96),rgba(20,27,37,.96))}.metric{padding:14px 16px}.metric span{display:block;color:var(--muted);font-size:12px}.metric strong{display:block;font-size:24px;margin-top:4px}.layout{display:grid;grid-template-columns:minmax(300px,.85fr) minmax(0,1.6fr);gap:14px;align-items:start}.panel{overflow:hidden}.panel-head{display:flex;align-items:center;justify-content:space-between;padding:15px 17px;border-bottom:1px solid var(--line)}h2{font-size:15px;margin:0}.panel-head small,.muted{color:var(--muted)}.incident-list{max-height:70vh;overflow:auto}.incident{display:block;width:100%;text-align:left;border:0;border-bottom:1px solid var(--line);border-radius:0;background:transparent;padding:13px 16px}.incident.selected{background:#20323a;border-left:3px solid var(--teal);padding-left:13px}.incident-title{display:block;font-weight:650}.incident-meta{display:flex;justify-content:space-between;color:var(--muted);font-size:12px;margin-top:5px}.badge{display:inline-flex;align-items:center;border:1px solid var(--line);border-radius:999px;padding:2px 8px;color:var(--muted);font-size:11px}.badge.active{border-color:#745a2b;color:var(--amber)}.badge.recovered{border-color:#286f5d;color:var(--teal)}.detail{padding:18px}.empty{padding:52px 24px;text-align:center;color:var(--muted)}.detail-title{display:flex;justify-content:space-between;gap:16px;align-items:flex-start}.detail-title h2{font-size:21px}.detail-title p{color:var(--muted);margin:5px 0}.actions{display:flex;gap:7px;flex-wrap:wrap;margin:15px 0 18px}.section{margin-top:20px}.section h3{margin:0 0 9px;font-size:13px;color:#c5d1de}.timeline,.evidence,.runbook{border-top:1px solid var(--line)}.event,.evidence-row{padding:10px 0;border-bottom:1px solid var(--line)}.event{display:grid;grid-template-columns:74px 100px minmax(0,1fr);gap:10px}.event time,.event .actor{font-size:12px;color:var(--muted)}.event strong{font-weight:600}.event pre{white-space:pre-wrap;overflow-wrap:anywhere;color:#b9c7d6;font:12px/1.5 ui-monospace,SFMono-Regular,Consolas,monospace;margin:4px 0 0}.evidence-row{display:grid;grid-template-columns:125px minmax(0,1fr);gap:10px}.evidence-row small{color:var(--muted)}.runbooks{margin-top:16px}.runbook{padding:14px 16px}.runbook h3{margin:0;font-size:14px}.runbook p{color:var(--muted);margin:4px 0}.runbook pre{max-height:240px;overflow:auto;white-space:pre-wrap;color:#bdc9d6;background:#121820;border-radius:8px;padding:11px;font:12px/1.5 ui-monospace,SFMono-Regular,Consolas,monospace}.call-log{color:var(--muted);font-size:12px;margin:8px 0}.footer{margin:20px 0;color:var(--muted);font-size:12px}
+    @media(max-width:900px){.layout{grid-template-columns:1fr}.incident-list{max-height:38vh}.metrics{grid-template-columns:repeat(2,minmax(0,1fr))}.top{align-items:flex-start;flex-direction:column}.auth{width:100%}}
+  </style>
+</head>
+<body>
+<main class="shell">
+  <header class="top">
+    <div class="brand"><div class="mark">2</div><div><div class="eyebrow">SecondShift · Operations</div><h1>Incident desk</h1><p class="subtitle">Evidence, decisions, and verified recovery in one timeline.</p></div></div>
+    <form class="auth" id="auth">
+      <input id="token" type="password" autocomplete="off" placeholder="Dashboard token" aria-label="Dashboard token">
+      <select id="responder" aria-label="Responder"><option value="primary-engineer">primary-engineer</option><option value="backup-engineer">backup-engineer</option></select>
+      <button type="submit" class="primary">Connect</button>
+    </form>
+  </header>
+  <div class="notice" id="notice" role="status"></div>
+  <section class="metrics" id="metrics"></section>
+  <div class="layout">
+    <section class="panel">
+      <div class="panel-head"><h2>Incidents</h2><button id="refresh">Refresh</button></div>
+      <div class="incident-list" id="incidents"><div class="empty">Connect to load incidents.</div></div>
+    </section>
+    <section class="panel">
+      <div class="panel-head"><h2>Incident record</h2><small id="updated"></small></div>
+      <div id="detail" class="empty">Select an incident to inspect its evidence and timeline.</div>
+    </section>
+  </div>
+  <section class="panel runbooks">
+    <div class="panel-head"><h2>Learned runbooks</h2><small>Evaluation and authorisation are separate decisions.</small></div>
+    <div id="runbooks"><div class="empty">Connect to load runbooks.</div></div>
+  </section>
+  <p class="footer">Controlled demo only. Recovery requires synthetic checkout results and matching successful Sentry traces; a mitigation does not repair the underlying dependency.</p>
+</main>
+<script>
+(() => {
+  const $ = (id) => document.getElementById(id);
+  const saved = sessionStorage.getItem("secondshift.dashboardToken");
+  if (saved) $("token").value = saved;
+  const state = { incidents: [], selected: null, detail: null, primary: "primary-engineer" };
+  const safe = (value) => String(value ?? "");
+  const date = (value) => value ? new Date(value).toLocaleString() : "—";
+  const explainError = (error) => { $("notice").textContent = error.message; $("notice").style.display = "block"; };
+  const clearError = () => { $("notice").textContent = ""; $("notice").style.display = "none"; };
+  async function api(path, options = {}) {
+    const token = $("token").value.trim();
+    const response = await fetch(path, {
+      ...options,
+      headers: {
+        authorization: `Bearer ${token}`,
+        "x-responder": $("responder").value,
+        "content-type": "application/json",
+        ...(options.headers || {})
+      }
+    });
+    const body = response.status === 204 ? null : await response.json();
+    if (!response.ok) throw new Error(body?.error || `Request failed (${response.status})`);
+    return body;
+  }
+  function button(label, action, kind = "") {
+    const element = document.createElement("button");
+    element.textContent = label;
+    if (kind) element.className = kind;
+    element.addEventListener("click", action);
+    return element;
+  }
+  async function refresh() {
+    clearError();
+    const responderResponse = await fetch("/dashboard-api/responders", { headers: { authorization: `Bearer ${$("token").value.trim()}` } });
+    const responders = await responderResponse.json();
+    if (!responderResponse.ok) throw new Error(responders.error || `Request failed (${responderResponse.status})`);
+    state.primary = responders.primary;
+    const selectedResponder = $("responder").value;
+    $("responder").replaceChildren(...[responders.primary, responders.backup].map((name) => {
+      const option = document.createElement("option"); option.value = name; option.textContent = name; return option;
+    }));
+    if ([responders.primary, responders.backup].includes(selectedResponder)) $("responder").value = selectedResponder;
+    state.incidents = await api("/dashboard-api/incidents");
+    renderIncidents();
+    renderMetrics(await api("/dashboard-api/metrics"));
+    await loadRunbooks();
+    if (state.selected) await selectIncident(state.selected);
+  }
+  function duration(value) {
+    if (value === null || value === undefined) return "—";
+    const seconds = Math.round(value / 1000);
+    return seconds < 60 ? `${seconds}s` : `${Math.floor(seconds / 60)}m ${seconds % 60}s`;
+  }
+  function renderMetrics(metrics) {
+    const active = state.incidents.filter((incident) => incident.status !== "recovered").length;
+    const awaiting = state.incidents.filter((incident) => incident.status === "awaiting_decision").length;
+    const recovered = state.incidents.filter((incident) => incident.status === "recovered").length;
+    const items = [
+      ["Active incidents", active],
+      ["Awaiting a decision", awaiting],
+      ["Verified recoveries", recovered],
+      ["Alert → acknowledgement", duration(metrics.averageAlertToAcknowledgementMs)],
+      ["Alert → verified recovery", duration(metrics.averageAlertToVerifiedRecoveryMs)],
+      ["Human action decisions", metrics.humanActionDecisions],
+      ["Runbook executions", metrics.authorisedRunbookExecutions],
+      ["Repeat alerts attached", metrics.repeatAlertsAttached],
+      ["Webhook retries suppressed", metrics.webhookRetriesSuppressed],
+      ["Unsuccessful actions", metrics.unsuccessfulActions]
+    ];
+    $("metrics").replaceChildren(...items.map(([label, value]) => {
+      const card = document.createElement("div"); card.className = "metric";
+      const title = document.createElement("span"); title.textContent = label;
+      const number = document.createElement("strong"); number.textContent = value;
+      card.append(title, number); return card;
+    }));
+  }
+  function renderIncidents() {
+    const list = $("incidents");
+    if (!state.incidents.length) { list.innerHTML = '<div class="empty">No incidents yet.</div>'; return; }
+    list.replaceChildren(...state.incidents.map((incident) => {
+      const item = document.createElement("button");
+      item.className = `incident${state.selected === incident.id ? " selected" : ""}`;
+      const title = document.createElement("span"); title.className = "incident-title"; title.textContent = `#${incident.id} · ${incident.title}`;
+      const meta = document.createElement("span"); meta.className = "incident-meta";
+      const owner = document.createElement("span"); owner.textContent = `${incident.owner} · ${date(incident.opened_at)}`;
+      const status = document.createElement("span"); status.className = `badge ${incident.status === "recovered" ? "recovered" : "active"}`; status.textContent = incident.status.replaceAll("_", " ");
+      meta.append(owner, status); item.append(title, meta);
+      item.addEventListener("click", () => selectIncident(incident.id).catch(explainError));
+      return item;
+    }));
+  }
+  function parse(value) { try { return JSON.parse(value); } catch { return value; } }
+  async function selectIncident(id) {
+    state.selected = id;
+    state.detail = await api(`/dashboard-api/incidents/${id}`);
+    renderIncidents();
+    renderDetail();
+  }
+  function renderDetail() {
+    const data = state.detail;
+    if (!data) return;
+    const incident = data.incident;
+    const root = document.createElement("div"); root.className = "detail";
+    const heading = document.createElement("div"); heading.className = "detail-title";
+    const titleBlock = document.createElement("div");
+    const title = document.createElement("h2"); title.textContent = `#${incident.id} · ${incident.title}`;
+    const summary = document.createElement("p"); summary.textContent = `${incident.service} / ${incident.environment} · ${incident.severity} · Owner: ${incident.owner}`;
+    titleBlock.append(title, summary);
+    const status = document.createElement("span"); status.className = `badge ${incident.status === "recovered" ? "recovered" : "active"}`; status.textContent = incident.status.replaceAll("_", " ");
+    heading.append(titleBlock, status); root.append(heading);
+    const actions = document.createElement("div"); actions.className = "actions";
+    if (incident.ack_state !== "acknowledged") actions.append(button("Acknowledge", async () => runAction(`/dashboard-api/incidents/${incident.id}/ack`, {})));
+    if (incident.autonomy !== "halted" && incident.status !== "recovered") actions.append(button("I’ll take over", async () => runAction(`/dashboard-api/incidents/${incident.id}/take-over`, {}), "danger"));
+    if (incident.status !== "recovered") actions.append(button("Call primary", async () => runAction(`/dashboard-api/incidents/${incident.id}/notify`, { target: "primary" })));
+    if (incident.status !== "recovered" && incident.escalation_state === "escalated_to_backup") actions.append(button("Call backup", async () => runAction(`/dashboard-api/incidents/${incident.id}/notify`, { target: "backup" })));
+    root.append(actions);
+    if (data.retrospective) {
+      const note = document.createElement("p"); note.className = "call-log"; note.textContent = `${data.retrospective.summary} Follow-up: ${data.retrospective.unresolved_work}`; root.append(note);
+    }
+    if (data.phoneCalls?.length) {
+      const calls = document.createElement("p"); calls.className = "call-log";
+      calls.textContent = `Phone: ${data.phoneCalls.map((call) => `${call.responder} — ${call.status}${call.outcome ? ` (${call.outcome})` : ""}`).join(" · ")}`;
+      root.append(calls);
+    }
+    const timelineSection = document.createElement("section"); timelineSection.className = "section";
+    const timelineTitle = document.createElement("h3"); timelineTitle.textContent = "Timeline"; timelineSection.append(timelineTitle);
+    const timeline = document.createElement("div"); timeline.className = "timeline";
+    [...data.timeline].reverse().forEach((event) => {
+      const row = document.createElement("div"); row.className = "event";
+      const time = document.createElement("time"); time.textContent = new Date(event.at).toLocaleTimeString();
+      const actor = document.createElement("span"); actor.className = "actor"; actor.textContent = event.actor;
+      const content = document.createElement("div");
+      const name = document.createElement("strong"); name.textContent = event.action.replaceAll("_", " ");
+      content.append(name);
+      if (event.detail) { const pre = document.createElement("pre"); pre.textContent = JSON.stringify(parse(event.detail), null, 2); content.append(pre); }
+      row.append(time, actor, content); timeline.append(row);
+    });
+    timelineSection.append(timeline); root.append(timelineSection);
+    const evidenceSection = document.createElement("section"); evidenceSection.className = "section";
+    const evidenceTitle = document.createElement("h3"); evidenceTitle.textContent = "Evidence"; evidenceSection.append(evidenceTitle);
+    const evidence = document.createElement("div"); evidence.className = "evidence";
+    if (!data.evidence.length) { const empty = document.createElement("p"); empty.className = "muted"; empty.textContent = "No evidence attached yet."; evidence.append(empty); }
+    data.evidence.forEach((item) => {
+      const row = document.createElement("div"); row.className = "evidence-row";
+      const meta = document.createElement("small"); meta.textContent = `${item.source} · ${date(item.observed_at)}`;
+      const body = document.createElement("span"); body.textContent = JSON.stringify(parse(item.content));
+      row.append(meta, body); evidence.append(row);
+    });
+    evidenceSection.append(evidence); root.append(evidenceSection);
+    const proposed = data.proposedActions.filter((action) => action.approval_state === "pending" && Date.parse(action.expires_at) > Date.now());
+    proposed.forEach((action) => {
+      const confirm = document.createElement("p"); confirm.className = "call-log";
+      confirm.textContent = `Pending action: ${action.action} in ${action.target_environment}; expires ${date(action.expires_at)}. Approval runs fresh dependency probes before changing the flag.`;
+      const approve = button(`Approve and execute action ${action.id}`, async () => runAction(`/dashboard-api/incidents/${incident.id}/actions/${action.id}/approve`, {}), "primary");
+      const decline = button(`Decline action ${action.id}`, async () => runAction(`/dashboard-api/incidents/${incident.id}/actions/${action.id}/decline`, {}), "danger");
+      actions.append(approve, decline); root.insertBefore(confirm, timelineSection);
+    });
+    $("detail").replaceChildren(root);
+    $("updated").textContent = `Updated ${date(incident.updated_at)}`;
+  }
+  async function runAction(path, body) {
+    try { await api(path, { method: "POST", body: JSON.stringify(body) }); await refresh(); }
+    catch (error) { explainError(error); }
+  }
+  async function loadRunbooks() {
+    const list = $("runbooks");
+    const rows = await api("/dashboard-api/runbooks");
+    if (!rows.length) { list.innerHTML = '<div class="empty">A runbook appears here after a human-guided mitigation is verified.</div>'; return; }
+    list.replaceChildren(...rows.map((runbook) => {
+      const card = document.createElement("article"); card.className = "runbook";
+      const title = document.createElement("h3"); title.textContent = `${runbook.spec.name} · v${runbook.version}`;
+      const lifecycle = document.createElement("p"); lifecycle.textContent = `Lifecycle: ${runbook.lifecycle} · Created ${date(runbook.createdAt)}`;
+      card.append(title, lifecycle);
+      if (runbook.spec.markdown) { const pre = document.createElement("pre"); pre.textContent = runbook.spec.markdown; card.append(pre); }
+      if (runbook.evaluation) {
+        const results = document.createElement("p"); results.textContent = runbook.evaluation.map((test) => `${test.passed ? "PASS" : "FAIL"} ${test.name}`).join(" · "); card.append(results);
+      }
+      if (runbook.lifecycle === "evaluated" && $("responder").value === state.primary) {
+        card.append(button("Authorise for bounded automation", async () =>
+          runAction(`/dashboard-api/runbooks/${encodeURIComponent(runbook.id)}/${runbook.version}/authorise`, {}), "primary"));
+      }
+      if (runbook.lifecycle === "evaluated" || runbook.lifecycle === "authorised") {
+        card.append(button("Suspend runbook", async () =>
+          runAction(`/dashboard-api/runbooks/${encodeURIComponent(runbook.id)}/${runbook.version}/suspend`, {}), "danger"));
+      }
+      return card;
+    }));
+  }
+  $("auth").addEventListener("submit", (event) => {
+    event.preventDefault();
+    sessionStorage.setItem("secondshift.dashboardToken", $("token").value.trim());
+    refresh().catch(explainError);
+  });
+  $("refresh").addEventListener("click", () => refresh().catch(explainError));
+  if (saved) refresh().catch(explainError);
+})();
+</script>
+</body>
+</html>

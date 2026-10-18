@@ -1,7 +1,9 @@
 ﻿import { appendFileSync, mkdirSync } from "node:fs";
+import { randomUUID } from "node:crypto";
 
 const BASE = process.env.TARGET ?? `http://localhost:${process.env.PORT ?? 4000}`;
 const INTERVAL_MS = Number(process.env.INTERVAL_MS ?? 2000);
+const RUN_ID = process.env.RUN_ID ?? `synthetic-${randomUUID()}`;
 mkdirSync("logs", { recursive: true });
 
 // Continuous synthetic checkouts. Records timestamp, outcome and latency independently of the app's own log.
@@ -11,7 +13,11 @@ async function once() {
   try {
     const res = await fetch(`${BASE}/checkout`, {
       method: "POST",
-      headers: { "content-type": "application/json", "x-request-id": `syn-${Date.now()}` },
+      headers: {
+        "content-type": "application/json",
+        "x-request-id": `syn-${Date.now()}`,
+        "x-run-id": RUN_ID,
+      },
       body: JSON.stringify({ items: [{ sku: "sku-tee", qty: 1 }, { sku: "sku-mug", qty: 2 }] }),
     });
     const body: any = await res.json();

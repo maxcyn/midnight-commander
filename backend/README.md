@@ -1,20 +1,85 @@
-# SecondShift backend (tiny version)
+# SecondShift
 
-Endpoints (all `/tools/*` and `/debug/*` need `Authorization: Bearer $TOOL_TOKEN`):
+SecondShift is a controlled incident-response demo for one checkout service. It correlates real app telemetry, asks CREAO to investigate, gives an enrolled responder a phone/dashboard decision, applies one bounded feature-flag mitigation, and only reports recovery after measured functional checks and fresh successful Sentry traces.
 
-- `GET  /health` – no auth, liveness check
-- `GET  /tools/ping` – harmless tool for CREAO to call
-- `POST /tools/submit_investigation` – logs and stores whatever JSON it receives
-- `GET  /debug/submissions` – shows what has been submitted
+## Local setup
 
-## Run
+Use a current Node.js release with the built-in `node:sqlite` module. Install dependencies in both project folders:
 
-    cp .env.example .env     # then set TOOL_TOKEN (openssl rand -hex 24)
-    npm install
-    npm run dev
+```powershell
+cd backend
+npm install
+if (-not (Test-Path .env)) { Copy-Item .env.example .env }
+cd ..\demo-app
+npm install
+if (-not (Test-Path .env)) { Copy-Item .env.example .env }
+```
 
-## Expose to CREAO
+Set unique random values for `TOOL_TOKEN`, `WEBHOOK_SECRET`, `DASHBOARD_TOKEN`, `VOICE_TOOL_TOKEN`, and `VOICE_APPROVAL_PIN` in `backend/.env`. Set separate values for `DEV_TOKEN`, `ACTION_TOKEN`, and `PROBE_TOKEN` in `demo-app/.env`. Copy the demo app's `PROBE_TOKEN` to backend `DEMO_PROBE_TOKEN`, and its `ACTION_TOKEN` to backend `DEMO_ACTION_TOKEN`. These are separate permissions: CREAO receives only `TOOL_TOKEN`; the checkout app's test runner alone receives `DEV_TOKEN`; the backend alone receives the action token.
 
-    ngrok http 3000          # or: cloudflared tunnel --url http://localhost:3000
+Set the same Sentry project values in the app and backend:
 
-Save the public https URL as `BACKEND_URL` and the token as `BACKEND_TOKEN` in CREAO's Secrets.
+- `demo-app/.env`: `SENTRY_DSN`, `SENTRY_ENVIRONMENT=demo`, `RELEASE`
+- `backend/.env`: `SENTRY_BASE_URL`, `SENTRY_AUTH_TOKEN`, `SENTRY_ORG`, `SENTRY_PROJECT`, `SENTRY_WEBHOOK_SECRET`
+
+Run each process in its own terminal:
+
+```powershell
+cd demo-app
+npm run dev
+```
+
+```powershell
+cd backend
+npm run dev
+```
+
+Open `http://localhost:4000/` for checkout, `http://localhost:4000/dev.html` for test-only fault controls, and `http://localhost:3000/dashboard` for the incident desk. Run `npm run synthetic` in `demo-app` to emit continuous checkouts. It writes its independent result log to `demo-app/logs/synthetic.jsonl`.
+
+## Integrations
+
+### Sentry
+
+Instrumented checkout requests send errors, structured logs, and checkout/dependency spans. Enable Logs in the Sentry project and configure complete trace sampling for this small demo, subject to quota. Create an alert action pointing to `https://<PUBLIC_URL>/sentry-webhook`, configure its signing secret in `SENTRY_WEBHOOK_SECRET`, and include a stable Sentry issue identifier. Webhook bodies are saved before acknowledgement; duplicate deliveries are ignored and queued deliveries are retried after backend restart.
+
+The backend investigator adapter queries errors, logs, and spans. Confirm the account's Explore datasets, field names, permissions, and region through the configured Sentry organization. Recovery requires at least ten successful synthetic checkouts spanning 30 seconds and ten matching successful checkout traces after the action. If Sentry is delayed or unavailable, the incident stays unresolved; the timeline reports functional-only checks rather than a false recovery.
+
+### CREAO
+
+Create a CREAO agent using [agent-prompt.md](./agent-prompt.md), with an `incident_id` input and connected HTTP tools. Set `BACKEND_URL` (the public HTTPS tunnel without a trailing slash) and `BACKEND_TOKEN` (`TOOL_TOKEN`) in CREAO secrets. Configure the backend callback URL using `PUBLIC_URL` and `WEBHOOK_SECRET`.
+
+The adapter currently calls CREAO's `/api/v1/runs` interface. Confirm the Trigger API, tool credentials, and callback payload shape in the hackathon account before relying on it. A harmless tool-call check is `GET /tools/ping`; do not promote the agent's recommendation directly into an action.
+
+### Retell and Photon
+
+Configure the Retell responder agent and custom functions using [voice-agent-prompt.md](./voice-agent-prompt.md). Set `RETELL_API_KEY`, `RETELL_AGENT_ID`, `RETELL_FROM_NUMBER`, and enrolled `PRIMARY_PHONE`/`BACKUP_PHONE` values in E.164 form. Register `https://<PUBLIC_URL>/retell-webhook` in Retell and use a key that can verify webhook signatures. `PHONE_AUTO_NOTIFY` defaults to false so setup cannot trigger unintentional calls; enable it only after testing with enrolled participants.
+
+Photon must provide a supported voice-capable number/country and the account-side SIP connection to Retell. Shared iMessage-only lines cannot receive the planned voice call. A live call and the exact Photon challenge requirements remain account-side checks; source configuration alone does not claim those checks passed.
+
+## Demo sequence
+
+1. Confirm a healthy checkout at `http://localhost:4000/`.
+2. Start synthetic traffic and turn on only the recommendation fault at `/dev.html`.
+3. Let Sentry receive telemetry; its signed webhook creates an incident and triggers CREAO. Alternatively, use the backend's authenticated `POST /debug/alert` endpoint to test the app flow without an alert rule; include the synthetic traffic's `run_id` so functional and Sentry recovery evidence can be correlated to that incident. `scripts/run-scenario.sh` does this automatically.
+4. Review the evidence, investigation, pending action, and phone-call record in the dashboard. CREAO's `POST /tools/submit_investigation` must cite source IDs previously retrieved through incident-scoped tools.
+5. A configured responder approves the exact pending action in the dashboard or via the PIN-protected Retell function. The backend rechecks the recommendation and payment probes and current feature configuration before the single idempotent mutation.
+6. Keep synthetic traffic running. Recovery requires the functional/trace thresholds above. Payment failures, mixed dependency failures, stale evidence, rejected actions, and incomplete telemetry remain unresolved and escalate.
+7. A verified human-guided intervention produces a versioned draft runbook and fixed evaluation results. Only the primary responder can separately authorise an evaluated version. Matching recurrence can then run that bounded action only after a fresh backend check confirms applicability. Runbooks can be suspended.
+
+## API boundaries
+
+- `TOOL_TOKEN`: CREAO's read-only evidence/configuration/probe/runbook tools and structured submission.
+- `DEBUG_TOKEN`: separate operator-only access to `/debug/*` test endpoints.
+- `DASHBOARD_TOKEN`: dashboard access. Set `X-Responder` to the configured primary/backup name; only the active owner or escalated backup may approve actions. The primary alone can authorise or suspend runbooks.
+- `VOICE_TOOL_TOKEN` plus Retell's signed request: phone tools. Calls must match a registered answered call. Operational voice approval also requires the out-of-band `VOICE_APPROVAL_PIN`.
+- `DEMO_PROBE_TOKEN`: backend-only read-only configuration, dependency probes, and synthetic request history.
+- `DEMO_ACTION_TOKEN`: backend-only explicit mitigation.
+- `DEV_TOKEN`: test-runner-only fault injection/reset.
+
+The demo app and responder backend are separate services. Never pass fault-injection credentials to CREAO or Retell. Do not expose the dashboard or dev controls directly to the public internet without an authenticated tunnel/network policy.
+
+## Checks
+
+The backend's `npm run selftest` runs isolated SQLite checks for incident deduplication/lifecycle, investigation decisions, and runbook refusal cases. The demo-app `npm run selftest` verifies healthy checkout, recommendation timeout and mitigation, payment counterexample, independent probes, and authorization boundaries; these app checks require the demo service to be running.
+
+The following checks still require configured external accounts and cannot be verified by a local self-test: ingest/retrieve Sentry error+log+trace, CREAO saved-agent Trigger and connected-tool execution, and a real Photon/Retell phone call. Configure those accounts and complete the checks before presenting the integrations as live.

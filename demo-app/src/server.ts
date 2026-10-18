@@ -24,6 +24,7 @@ const state = {
 interface RequestRecord {
   at: string;
   requestId: string;
+  runId: string;
   ok: boolean;
   status: number;
   stage: string;
@@ -90,7 +91,7 @@ app.post("/checkout", async (req, res) => {
   let stage = "validation";
   const record = (ok: boolean, status: number, error?: string) =>
     requestLog.push({
-      at: new Date().toISOString(), requestId, ok, status, stage,
+      at: new Date().toISOString(), requestId, runId, ok, status, stage,
       latencyMs: Date.now() - started,
       recommendationsEnabled: state.recommendationsEnabled, error,
     });
@@ -204,6 +205,9 @@ app.get("/probe/:dependency", bearer(PROBE_TOKEN), async (req, res) => {
 // ---- Mitigation: one explicit, idempotent action (not a toggle) ----------
 app.post("/actions/disable-recommendations", bearer(ACTION_TOKEN), (req, res) => {
   const previous = state.recommendationsEnabled;
+  if (req.body?.expectedPreviousValue === true && !previous) {
+    return res.status(409).json({ error: "precondition failed: recommendations are already disabled", currentValue: false });
+  }
   if (previous) {
     state.flagHistory.push({ at: new Date().toISOString(), from: true, to: false, by: String(req.body?.actor ?? "responder") });
     state.recommendationsEnabled = false;

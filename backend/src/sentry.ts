@@ -20,6 +20,7 @@ async function query(dataset: "errors" | "logs" | "spans", fields: string[], opt
   if (opts.query) params.set("query", opts.query);
   const res = await fetch(`${base()}/api/0/organizations/${env("SENTRY_ORG")}/events/?${params}`, {
     headers: { Authorization: `Bearer ${env("SENTRY_AUTH_TOKEN")}` },
+    signal: AbortSignal.timeout(10_000),
   });
   const body: any = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(`Sentry ${dataset} query ${res.status}: ${JSON.stringify(body).slice(0, 300)}`);
@@ -43,7 +44,7 @@ export interface EvidenceBundle {
 }
 
 const LOG_FIELDS = ["timestamp", "timestamp_precise", "severity", "message", "trace", "dependency", "request_id", "run_id", "failed_stage", "latency_ms"];
-const SPAN_FIELDS = ["id", "timestamp", "span.op", "span.description", "span.duration", "span.status", "trace"];
+const SPAN_FIELDS = ["id", "timestamp", "span.op", "span.description", "span.duration", "span.status", "trace", "run_id"];
 const SPAN_OPS = "span.op:[checkout,dependency.recommendations,dependency.payment]";
 
 export async function getEvidence(minutes = 15, runId?: string): Promise<EvidenceBundle> {
@@ -73,7 +74,7 @@ export async function getEvidence(minutes = 15, runId?: string): Promise<Evidenc
     })),
     spans: spans.map((r) => ({
       source: "sentry.span", sourceId: r.id, observedAt: r.timestamp, summary: `${r["span.op"]} ${r["span.description"]} ${Math.round(r["span.duration"])}ms status=${r["span.status"]}`,
-      attributes: { trace: r.trace, op: r["span.op"], durationMs: r["span.duration"], status: r["span.status"] },
+      attributes: { trace: r.trace, run_id: r.run_id, op: r["span.op"], durationMs: r["span.duration"], status: r["span.status"] },
     })),
   };
 }

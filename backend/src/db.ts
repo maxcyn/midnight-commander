@@ -20,6 +20,7 @@ CREATE TABLE IF NOT EXISTS incidents (
   severity TEXT NOT NULL DEFAULT 'sev2',
   title TEXT NOT NULL,
   sentry_issue_id TEXT NOT NULL,       -- recurrence key, together with environment
+  run_id TEXT,
   previous_incident_id INTEGER REFERENCES incidents(id),
   -- Tracked separately on purpose: "escalated" or "acknowledged" never implies recovery.
   ack_state TEXT NOT NULL DEFAULT 'unacknowledged',
@@ -93,7 +94,75 @@ CREATE TABLE IF NOT EXISTS webhook_deliveries (
   received_at TEXT NOT NULL,
   incident_id INTEGER
 );
+
+CREATE TABLE IF NOT EXISTS webhook_events (
+  delivery_id TEXT PRIMARY KEY,
+  received_at TEXT NOT NULL,
+  body TEXT NOT NULL,
+  status TEXT NOT NULL DEFAULT 'queued',
+  incident_id INTEGER,
+  error TEXT
+);
+
+CREATE TABLE IF NOT EXISTS webhook_retries (
+  delivery_id TEXT PRIMARY KEY,
+  retry_count INTEGER NOT NULL,
+  last_received_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS retell_webhook_events (
+  event_id TEXT PRIMARY KEY,
+  received_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS action_executions (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  proposed_action_id INTEGER NOT NULL UNIQUE REFERENCES proposed_actions(id),
+  incident_id INTEGER NOT NULL REFERENCES incidents(id),
+  actor TEXT NOT NULL,
+  status TEXT NOT NULL,
+  started_at TEXT NOT NULL,
+  finished_at TEXT,
+  result TEXT,
+  verification TEXT
+);
+
+CREATE TABLE IF NOT EXISTS verification_samples (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  execution_id INTEGER NOT NULL REFERENCES action_executions(id),
+  observed_at TEXT NOT NULL,
+  successful_checkouts INTEGER NOT NULL DEFAULT 0,
+  checkout_window_ms INTEGER NOT NULL DEFAULT 0,
+  successful_traces INTEGER NOT NULL DEFAULT 0,
+  telemetry_error TEXT,
+  result TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS phone_calls (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  incident_id INTEGER NOT NULL REFERENCES incidents(id),
+  responder TEXT NOT NULL,
+  phone_number TEXT NOT NULL,
+  retell_call_id TEXT UNIQUE,
+  status TEXT NOT NULL,
+  briefing TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  outcome TEXT
+);
+
+CREATE TABLE IF NOT EXISTS retrospectives (
+  incident_id INTEGER PRIMARY KEY REFERENCES incidents(id),
+  summary TEXT NOT NULL,
+  unresolved_work TEXT NOT NULL,
+  generated_at TEXT NOT NULL
+);
 `);
+
+const incidentColumns = db.prepare(`PRAGMA table_info(incidents)`).all() as { name: string }[];
+if (!incidentColumns.some((column) => column.name === "run_id")) {
+  db.exec(`ALTER TABLE incidents ADD COLUMN run_id TEXT`);
+}
 
 // Manually configured owners; a rotation calendar is out of scope.
 db.prepare(

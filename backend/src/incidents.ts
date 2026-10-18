@@ -36,6 +36,7 @@ export interface ParsedAlert {
   eventId: string;
   observedAt: string;
   service: string;
+  runId?: string;
   raw: unknown;
 }
 
@@ -44,8 +45,11 @@ export function parseSentryAlert(body: any): ParsedAlert | null {
   const ev = body?.data?.event ?? body?.data?.issue ?? {};
   const issueId = ev.issue_id ?? body?.data?.issue?.id ?? ev.groupID;
   if (issueId === undefined || issueId === null) return null;
-  const tags: [string, string][] = Array.isArray(ev.tags) ? ev.tags : [];
-  const tag = (k: string) => tags.find((t) => t[0] === k)?.[1];
+  const tags: unknown[] = Array.isArray(ev.tags) ? ev.tags : [];
+  const tag = (key: string) => {
+    const row = tags.find((item: any) => Array.isArray(item) ? item[0] === key : item?.key === key);
+    return Array.isArray(row) ? row[1] : (row as any)?.value;
+  };
   return {
     sentryIssueId: String(issueId),
     environment: String(ev.environment ?? tag("environment") ?? "unknown"),
@@ -53,6 +57,7 @@ export function parseSentryAlert(body: any): ParsedAlert | null {
     eventId: String(ev.event_id ?? ev.id ?? `no-event-${Date.now()}`),
     observedAt: String(ev.datetime ?? ev.timestamp ?? now()),
     service: tag("service") ?? "checkout",
+    runId: tag("run_id") ? String(tag("run_id")) : undefined,
     raw: body,
   };
 }
@@ -80,8 +85,9 @@ export function processAlert(deliveryId: string, alert: ParsedAlert): AlertOutco
 
     let result: AlertOutcome;
     if (active) {
-      db.prepare(`UPDATE incidents SET alert_count = alert_count + 1, updated_at = ? WHERE id = ?`).run(now(), active.id);
-      addEvidence(active.id, "sentry.alert", alert.eventId, alert.observedAt, { title: alert.title, deliveryId });
+      db.prepare(`UPDATE incidents SET alert_count = alert_count + 1, updated_at = ?, run_id = COALESCE(run_id, ?) WHERE id = ?`)
+        .run(now(), alert.runId ?? null, active.id);
+      addEvidence(active.id, "sentry.alert", alert.eventId, alert.observedAt, { title: alert.title, deliveryId, run_id: alert.runId });
       addTimeline(active.id, "sentry", "recurring_alert_attached", { eventId: alert.eventId, deliveryId });
       result = { outcome: "attached", incidentId: active.id };
     } else {
@@ -92,11 +98,11 @@ export function processAlert(deliveryId: string, alert: ParsedAlert): AlertOutco
       const svc = db.prepare(`SELECT * FROM services WHERE name = ?`).get(alert.service) as any
         ?? db.prepare(`SELECT * FROM services WHERE name = 'checkout'`).get() as any;
       const info = db.prepare(
-        `INSERT INTO incidents (service, environment, title, sentry_issue_id, previous_incident_id, owner, opened_at, updated_at)
-         VALUES (?,?,?,?,?,?,?,?)`,
-      ).run(svc.name, alert.environment, alert.title, alert.sentryIssueId, prev?.id ?? null, svc.primary_responder, now(), now());
+        `INSERT INTO incidents (service, environment, title, sentry_issue_id, run_id, previous_incident_id, owner, opened_at, updated_at)
+         VALUES (?,?,?,?,?,?,?,?,?)`,
+      ).run(svc.name, alert.environment, alert.title, alert.sentryIssueId, alert.runId ?? null, prev?.id ?? null, svc.primary_responder, now(), now());
       const id = Number(info.lastInsertRowid);
-      addEvidence(id, "sentry.alert", alert.eventId, alert.observedAt, { title: alert.title, deliveryId });
+      addEvidence(id, "sentry.alert", alert.eventId, alert.observedAt, { title: alert.title, deliveryId, run_id: alert.runId });
       addTimeline(id, "sentry", "incident_opened", { title: alert.title, previousIncident: prev?.id ?? null });
       addTimeline(id, "system", "owner_assigned", { owner: svc.primary_responder, backup: svc.backup_responder });
       result = { outcome: prev ? "opened_linked_to_previous" : "opened", incidentId: id };
@@ -129,6 +135,7 @@ export function transition(id: number, to: Status, actor: string, detail?: unkno
 export function acknowledge(id: number, by: string) {
   const inc = getIncident(id);
   if (!inc) throw new Error(`incident ${id} not found`);
+  if (!isConfiguredResponder(inc, by)) throw new Error(`${by} is not an authorised responder for incident ${id}`);
   if (inc.ack_state === "acknowledged") return; // idempotent
   db.prepare(`UPDATE incidents SET ack_state = 'acknowledged', acknowledged_by = ? WHERE id = ?`).run(by, id);
   touch(id);
@@ -148,8 +155,16 @@ export function escalate(id: number, reason: string) {
 export function takeOver(id: number, by: string) {
   const inc = getIncident(id);
   if (!inc) throw new Error(`incident ${id} not found`);
+  if (!isConfiguredResponder(inc, by)) throw new Error(`${by} is not an authorised responder for incident ${id}`);
   db.prepare(`UPDATE incidents SET owner = ?, autonomy = 'halted', updated_at = ? WHERE id = ?`).run(by, now(), id);
   addTimeline(id, by, "took_over", { autonomy: "halted" });
+}
+
+function isConfiguredResponder(incident: any, person: string) {
+  const primary = process.env.PRIMARY_RESPONDER ?? "primary-engineer";
+  const backup = process.env.BACKUP_RESPONDER ?? "backup-engineer";
+  return person === primary || (person === backup &&
+    (incident.owner === backup || incident.escalation_state === "escalated_to_backup"));
 }
 
 export function listIncidents() {
@@ -164,5 +179,9 @@ export function incidentDetail(id: number) {
     evidence: db.prepare(`SELECT * FROM evidence WHERE incident_id = ? ORDER BY observed_at`).all(id),
     timeline: db.prepare(`SELECT * FROM timeline_events WHERE incident_id = ? ORDER BY id`).all(id),
     proposedActions: db.prepare(`SELECT * FROM proposed_actions WHERE incident_id = ? ORDER BY id`).all(id),
+    investigations: db.prepare(`SELECT id, run_id, status, started_at, finished_at, result, decision FROM investigations WHERE incident_id = ? ORDER BY id`).all(id),
+    phoneCalls: db.prepare(`SELECT id, responder, phone_number, retell_call_id, status, briefing, created_at, updated_at, outcome FROM phone_calls WHERE incident_id = ? ORDER BY id`).all(id),
+    executions: db.prepare(`SELECT * FROM action_executions WHERE incident_id = ? ORDER BY id`).all(id),
+    retrospective: db.prepare(`SELECT * FROM retrospectives WHERE incident_id = ?`).get(id) ?? null,
   };
 }

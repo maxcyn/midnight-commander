@@ -1,5 +1,6 @@
 // Stage 4 policy checks: the backend, not the model's confidence, decides what is permitted.
 import { decide, validateResult, type InvestigationResult } from "./investigation.js";
+import { evaluateRunbookApplicability } from "./workflows.js";
 
 let failures = 0;
 function check(name: string, cond: boolean, detail = "") {
@@ -57,6 +58,23 @@ check("supported cause but no proposable action -> engineer decides, nothing pro
 check("valid result accepted", validateResult(base()).ok === true);
 const bad = validateResult({ ...base(), recommendation: "do_it_now", hypotheses: [{ cause: "dns", status: "97% sure" }] });
 check("invalid enum values are rejected with reasons", !bad.ok && bad.errors.length >= 3, JSON.stringify(bad));
+
+const recommendationCase = {
+  environment: "demo",
+  evidenceFresh: true,
+  recommendationFailureSupported: true,
+  recommendationHealthy: false,
+  paymentHealthy: true,
+  recommendationsEnabled: true,
+  operationAllowed: true,
+};
+check("runbook applies when fresh evidence and independent probes agree", evaluateRunbookApplicability(recommendationCase));
+check("runbook selection is independent of Sentry issue id on recurrence", evaluateRunbookApplicability({ ...recommendationCase }));
+check("runbook refuses payment-only failures", !evaluateRunbookApplicability({ ...recommendationCase, recommendationFailureSupported: false, paymentHealthy: false }));
+check("runbook refuses simultaneous dependency failures", !evaluateRunbookApplicability({ ...recommendationCase, paymentHealthy: false }));
+check("runbook refuses stale evidence", !evaluateRunbookApplicability({ ...recommendationCase, evidenceFresh: false }));
+check("runbook refuses when recommendation flag is already disabled", !evaluateRunbookApplicability({ ...recommendationCase, recommendationsEnabled: false }));
+check("runbook refuses an out-of-scope environment", !evaluateRunbookApplicability({ ...recommendationCase, environment: "production" }));
 
 console.log(failures === 0 ? "\nAll Stage 4 policy checks passed" : `\n${failures} check(s) failed`);
 process.exit(failures === 0 ? 0 : 1);
