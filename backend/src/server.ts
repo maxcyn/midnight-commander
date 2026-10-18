@@ -10,7 +10,7 @@ import { startInvestigation, submitInvestigation, validateResult, onRunFinished 
 import { reportBackendError } from "./monitoring.js";
 import { acknowledge, addEvidence, escalate, getIncident, incidentDetail, listIncidents, parseSentryAlert, processAlert, takeOver } from "./incidents.js";
 import { approveAndExecute, approveVoiceAction, authoriseRunbook, declineAction, executeAuthorisedRunbook, notifyResponder, pastDecisions, recordManualResolution, recordPhoneOutcome, suspendRunbook, verifyAuthorisedRunbookApplicability } from "./workflows.js";
-import { approveProposedAction, getCall, getLatestCallForIncident, getVoiceBriefing, getVoiceStatus, initiateCall, recordCallOutcome, runVoiceProbe, voiceTakeOver, type CallOutcome } from "./voice.js";
+import { approveProposedAction, getCall, getLatestCallForIncident, getVoiceBriefing, getVoiceStatus, initiateCall, recordCallOutcome, runVoiceProbe, voiceTakeOver, type CallOutcome, voiceDeclineAction } from "./voice.js";
 
 const PORT = Number(process.env.PORT ?? 3000);
 const TOOL_TOKEN = process.env.TOOL_TOKEN;
@@ -620,6 +620,14 @@ app.post("/voice/incidents/:id/approve", elevenVoiceAuth, async (req, res) => {
   }
 });
 
+app.post("/voice/incidents/:id/decline", elevenVoiceAuth, wrap((req) =>
+  voiceDeclineAction({
+    incidentId: Number(req.params.id),
+    responder: String(req.body?.responder ?? process.env.PRIMARY_RESPONDER ?? "primary-engineer"),
+    action: req.body?.action ? String(req.body.action) : undefined,
+    reason: typeof req.body?.reason === "string" ? req.body.reason : undefined,
+  }),
+));
 app.post("/voice/incidents/:id/take-over", elevenVoiceAuth, wrap((req) =>
   voiceTakeOver(Number(req.params.id), String(req.body?.responder ?? process.env.PRIMARY_RESPONDER ?? "primary-engineer")),
 ));

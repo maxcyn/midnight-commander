@@ -100,6 +100,29 @@ export async function approveAndExecute(
   return executeAction(incidentId, actionId, actor);
 }
 
+// What the incident's own recorded evidence looked like when the engineer declined: the latest dependency probe
+// readings, the configuration, and the failing stage. Taken from the evidence table, not from anyone's words, so a
+// later investigation can compare it with what it sees now.
+function evidenceSnapshot(incidentId: number) {
+  const rows = db.prepare(
+    `SELECT source, observed_at, content FROM evidence WHERE incident_id = ? AND source IN ('demo.probe','demo.config','sentry.error') ORDER BY observed_at DESC`,
+  ).all(incidentId) as { source: string; observed_at: string; content: string }[];
+  const probes: Record<string, unknown> = {};
+  let config: unknown = null;
+  let failure: unknown = null;
+  for (const row of rows) {
+    const c = JSON.parse(row.content);
+    if (row.source === "demo.probe" && typeof c.dependency === "string" && !(c.dependency in probes)) {
+      probes[c.dependency] = { healthy: c.healthy, latencyMs: c.latencyMs, error: c.error ?? null, observed_at: row.observed_at };
+    } else if (row.source === "demo.config" && !config) {
+      config = { recommendationsEnabled: c.recommendationsEnabled, paymentProvider: c.paymentProvider, observed_at: row.observed_at };
+    } else if (row.source === "sentry.error" && !failure) {
+      failure = { summary: c.summary, failed_stage: c.attributes?.failed_stage, observed_at: row.observed_at };
+    }
+  }
+  return { probes, config, failure };
+}
+
 export function declineAction(incidentId: number, actionId: number, actor: string, reason?: string) {
   const incident = getIncident(incidentId);
   if (!incident) throw new Error(`incident ${incidentId} not found`);
@@ -122,10 +145,13 @@ export function declineAction(incidentId: number, actionId: number, actor: strin
       .get(incidentId) as { result: string } | undefined;
     const r = inv ? JSON.parse(inv.result) : null;
     db.prepare(
-      `INSERT OR IGNORE INTO decision_feedback (incident_id, proposed_action_id, service, environment, action, decision, reason, responder, diagnosis, decided_at)
-       VALUES (?, ?, ?, ?, ?, 'declined', ?, ?, ?, ?)`,
+      `INSERT OR IGNORE INTO decision_feedback (incident_id, proposed_action_id, service, environment, action, decision, reason, responder, diagnosis, evidence_snapshot, decided_at)
+       VALUES (?, ?, ?, ?, ?, 'declined', ?, ?, ?, ?, ?)`,
     ).run(incidentId, actionId, incident.service, incident.environment, action.action, why, actor,
-      r ? JSON.stringify({ impact: r.impact?.summary, hypotheses: (r.hypotheses ?? []).map((h: any) => `${h.cause}:${h.status}`), proposed: r.proposed_action?.action ?? null }) : null, now());
+      r ? JSON.stringify({ impact: r.impact?.summary, hypotheses: (r.hypotheses ?? []).map((h: any) => `${h.cause}:${h.status}`), proposed: r.proposed_action?.action ?? null }) : null,
+      JSON.stringify(evidenceSnapshot(incidentId)), now());
+    // The engineer needs to say nothing more: when they make the correct change themselves, the backend notices.
+    watchForEngineerFix(incidentId, actor);
   }
   return { ok: true, actionId, status: expired ? "expired" : "rejected", reasonRecorded: !expired && !!why };
 }
@@ -505,7 +531,7 @@ export function pastDecisions(incidentId: number) {
   const inc = getIncident(incidentId);
   if (!inc) return undefined;
   const rows = db.prepare(
-    `SELECT id, incident_id, action, decision, reason, diagnosis, resolution, decided_at FROM decision_feedback
+    `SELECT id, incident_id, action, decision, reason, diagnosis, evidence_snapshot, resolution, decided_at FROM decision_feedback
      WHERE service = ? AND environment = ? AND incident_id != ? ORDER BY id DESC LIMIT 10`,
   ).all(inc.service, inc.environment, inc.id) as any[];
   return {
@@ -513,9 +539,49 @@ export function pastDecisions(incidentId: number) {
     decisions: rows.map((r) => ({
       decision_id: r.id, incident_id: r.incident_id, action: r.action, decision: r.decision,
       engineer_reason: r.reason, what_the_system_believed_then: r.diagnosis ? JSON.parse(r.diagnosis) : null,
+      evidence_when_declined: r.evidence_snapshot ? JSON.parse(r.evidence_snapshot) : null,
       what_actually_fixed_it: r.resolution, decided_at: r.decided_at,
     })),
   };
+}
+
+// After a decline the engineer makes the correct change in their own tooling. Watch the demo app's configuration and,
+// when it moves from what it was, record that as the manual fix and verify recovery. The engineer's word is never
+// the evidence of recovery: verification still decides.
+const watchers = new Map<number, NodeJS.Timeout>();
+function watchForEngineerFix(incidentId: number, responder: string) {
+  clearInterval(watchers.get(incidentId));
+  const intervalMs = Number(process.env.FIX_WATCH_INTERVAL_MS ?? 5_000);
+  const deadline = Date.now() + Number(process.env.FIX_WATCH_WINDOW_MS ?? 15 * 60_000);
+  const stop = () => { clearInterval(watchers.get(incidentId)); watchers.delete(incidentId); };
+  let baseline: { recommendationsEnabled?: unknown; paymentProvider?: unknown } | undefined;
+  let busy = false;
+  const timer = setInterval(async () => {
+    if (busy) return;
+    busy = true;
+    try {
+      const incident = getIncident(incidentId);
+      if (!incident || incident.status !== "awaiting_decision" || Date.now() > deadline) return stop();
+      const config = await demoGet("/config");
+      baseline ??= (JSON.parse((db.prepare(`SELECT evidence_snapshot FROM decision_feedback WHERE incident_id = ? ORDER BY id DESC LIMIT 1`)
+        .get(incidentId) as { evidence_snapshot: string } | undefined)?.evidence_snapshot ?? "{}").config ?? config);
+      let action: string | undefined;
+      let seen = "";
+      if (baseline!.paymentProvider === "primary" && config.paymentProvider === "backup") {
+        action = "switch_payment_provider"; seen = "payment provider changed from primary to backup";
+      } else if (baseline!.recommendationsEnabled === true && config.recommendationsEnabled === false) {
+        action = "disable_recommendations"; seen = "recommendations feature changed from enabled to disabled";
+      }
+      if (action) {
+        stop();
+        recordManualResolution(incidentId, responder, action, `Detected in the application's configuration: ${seen}.`);
+      }
+    } catch (error) {
+      console.error(`[fix-watch] incident ${incidentId}: ${error instanceof Error ? error.message : String(error)}`);
+    } finally { busy = false; }
+  }, intervalMs);
+  timer.unref();
+  watchers.set(incidentId, timer);
 }
 
 // The engineer fixed it themselves (outside this system) after declining or taking over. Record what they did,

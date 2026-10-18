@@ -170,7 +170,9 @@
       const lessonsTitle = document.createElement("h3"); lessonsTitle.textContent = "Lessons from this incident"; lessons.append(lessonsTitle);
       data.decisions.forEach((decision) => {
         const row = document.createElement("p"); row.className = "call-log";
-        row.textContent = `Declined ${decision.action}. Reason: ${decision.reason || "none given"}. ${decision.resolution ? `What fixed it: ${decision.resolution}` : "Not yet resolved."}`;
+        const snap = decision.evidence_snapshot ? parse(decision.evidence_snapshot) : null;
+        const seen = snap ? Object.entries(snap.probes || {}).map(([dep, p]) => `${dep} probe ${p.healthy ? "healthy" : "unhealthy"} ${p.latencyMs}ms`).join(", ") : "";
+        row.textContent = `Declined ${decision.action}.${seen ? ` Evidence then: ${seen}.` : ""}${decision.reason ? ` Reason: ${decision.reason}.` : ""} ${decision.resolution ? `What fixed it: ${decision.resolution}` : "Not yet resolved."}`;
         lessons.append(row);
       });
       root.append(lessons);
@@ -220,9 +222,8 @@
       confirm.textContent = `Pending action: ${action.action} in ${action.target_environment}; expires ${date(action.expires_at)}. Approval runs fresh dependency probes before changing the flag.`;
       const approve = button(`Approve and execute action ${action.id}`, async () => runAction(`/dashboard-api/incidents/${incident.id}/actions/${action.id}/approve`, {}), "primary");
       const decline = button(`Decline action ${action.id}`, async () => {
-        const reason = prompt("Why decline this action? Your reason is kept and shown to the investigator on later incidents.");
-        if (reason === null) return;
-        await runAction(`/dashboard-api/incidents/${incident.id}/actions/${action.id}/decline`, { reason });
+        // No reason needed: the evidence at this moment is recorded automatically, and the fix is detected.
+        await runAction(`/dashboard-api/incidents/${incident.id}/actions/${action.id}/decline`, {});
       }, "danger");
       actions.append(approve, decline); root.insertBefore(confirm, timelineSection);
     });

@@ -197,6 +197,11 @@ if (!incidentColumns.some((column) => column.name === "run_id")) {
   db.exec(`ALTER TABLE incidents ADD COLUMN run_id TEXT`);
 }
 
+const feedbackColumns = db.prepare(`PRAGMA table_info(decision_feedback)`).all() as { name: string }[];
+if (!feedbackColumns.some((column) => column.name === "evidence_snapshot")) {
+  db.exec(`ALTER TABLE decision_feedback ADD COLUMN evidence_snapshot TEXT`);
+}
+
 // Manually configured owners; a rotation calendar is out of scope.
 db.prepare(
   `INSERT OR IGNORE INTO services (name, dependencies, primary_responder, backup_responder) VALUES (?, ?, ?, ?)`,

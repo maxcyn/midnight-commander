@@ -1,5 +1,6 @@
 import { db } from "./db.js";
 import { acknowledge, addEvidence, addTimeline, escalate, getIncident, takeOver, transition } from "./incidents.js";
+import { declineAction } from "./workflows.js";
 
 export type CallOutcome = "initiated" | "answered" | "acknowledged" | "approved" | "failed" | "unanswered";
 
@@ -446,6 +447,36 @@ export function approveProposedAction(input: ApprovalInput) {
 }
 
 // 4. "I'll handle it" -> Transfer control and stop new autonomous actions
+// "No, don't do that": decline the pending proposal. No reason is needed; the backend snapshots the incident's own
+// evidence and then watches for the engineer's fix, so the engineer only has to make the change.
+export function voiceDeclineAction(input: { incidentId: number; responder: string; action?: string; reason?: string }) {
+  markCallAnsweredIfInitiated(input.incidentId);
+  const inc = getIncident(input.incidentId);
+  if (!inc) throw new Error(`incident ${input.incidentId} not found`);
+  if (!isEnrolledResponder(inc.service, input.responder)) {
+    throw new Error(`responder '${input.responder}' is not an enrolled responder for ${inc.service}`);
+  }
+  const pending = db
+    .prepare(`SELECT id, action FROM proposed_actions WHERE incident_id = ? AND approval_state = 'pending' ORDER BY id DESC LIMIT 1`)
+    .get(input.incidentId) as { id: number; action: string } | undefined;
+  if (!pending) throw new Error("no pending proposed action for this incident");
+  if (input.action && pending.action !== input.action) throw new Error(`pending action is '${pending.action}', not '${input.action}'`);
+
+  acknowledge(input.incidentId, input.responder);
+  const out = declineAction(input.incidentId, pending.id, input.responder, input.reason);
+  const call = getLatestCallForIncident(input.incidentId);
+  if (call && call.outcome !== "approved") {
+    db.prepare(`UPDATE calls SET outcome = 'acknowledged', updated_at = ?, ended_at = ? WHERE id = ?`).run(now(), now(), call.id);
+  }
+  return {
+    declined: true as const,
+    actionId: pending.id,
+    action: pending.action,
+    status: out.status,
+    spokenSummary: `Understood. I will not run ${pending.action.replaceAll("_", " ")}; nothing was changed. Make your fix and I will verify recovery.`,
+  };
+}
+
 export function voiceTakeOver(incidentId: number, responder: string) {
   markCallAnsweredIfInitiated(incidentId);
   const inc = getIncident(incidentId);

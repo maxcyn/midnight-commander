@@ -3,10 +3,12 @@
 import { createServer } from "node:http";
 import type { AddressInfo } from "node:net";
 import { db } from "./db.js";
-import { getIncident, incidentDetail, parseSentryAlert, processAlert, transition } from "./incidents.js";
+import { addEvidence, getIncident, incidentDetail, parseSentryAlert, processAlert, transition } from "./incidents.js";
 import { computeMetrics } from "./metrics.js";
 import { approveAndExecute, authoriseRunbook, declineAction, executeAuthorisedRunbook, pastDecisions, recordManualResolution, suspendRunbook, verificationDeps } from "./workflows.js";
 
+// Keep decline watchers quiet unless a test asks for them.
+process.env.FIX_WATCH_INTERVAL_MS = "3600000";
 let failures = 0;
 function check(name: string, cond: boolean, detail = "") {
   console.log(`${cond ? "PASS" : "FAIL"}  ${name}${cond ? "" : "  " + detail}`);
@@ -205,6 +207,35 @@ check("the lesson now records what actually fixed it", /backup provider/.test(fb
 check("retrospective for a provider switch is labelled correctly",
   (incidentDetail(inc1.id)!.retrospective as any).summary === "Checkout recovered; payments are running on the backup provider.");
 check("a manual provider fix does not generate a recommendations runbook", runbooks().length === runbooksBefore);
+
+// No reason, no spoken explanation: the decline snapshots the incident's own evidence, then the fix is detected.
+reset(); world.payLatency = 1800;
+const inc3 = awaitingDecision();
+const at = new Date().toISOString();
+addEvidence(inc3.id, "demo.probe", `demo.probe:payments:${at}`, at, { dependency: "payments", healthy: true, latencyMs: 1802, at });
+addEvidence(inc3.id, "demo.probe", `demo.probe:recommendations:${at}`, at, { dependency: "recommendations", healthy: false, latencyMs: 801, error: "timed out", at });
+addEvidence(inc3.id, "demo.config", `demo.config:${at}`, at, { recommendationsEnabled: true, paymentProvider: "primary" });
+addEvidence(inc3.id, "sentry.error", "err-1", at, { summary: "recommendation lookup timed out after 800ms", attributes: { failed_stage: "recommendations" } });
+process.env.FIX_WATCH_INTERVAL_MS = "100";
+const noReason: any = declineAction(inc3.id, inc3.actionId, PRIMARY);
+process.env.FIX_WATCH_INTERVAL_MS = "3600000";
+check("declining needs no reason", noReason.status === "rejected" && noReason.reasonRecorded === false);
+const snap = JSON.parse((db.prepare(`SELECT evidence_snapshot FROM decision_feedback WHERE incident_id = ?`).get(inc3.id) as any).evidence_snapshot);
+check("the snapshot captures raw probe readings, config and failing stage",
+  snap.probes.payments.latencyMs === 1802 && snap.probes.payments.healthy === true && snap.probes.recommendations.healthy === false && snap.config.paymentProvider === "primary" && snap.failure.failed_stage === "recommendations", JSON.stringify(snap));
+await new Promise((r) => setTimeout(r, 400));
+check("nothing is recorded as fixed while nothing has changed", getIncident(inc3.id).status === "awaiting_decision");
+world.provider = "backup"; // the engineer makes the correct change in their own tooling
+check("the backend notices the engineer's fix and starts verification on its own", await waitFor(() => ["verifying", "recovered"].includes(getIncident(inc3.id).status), 4000), getIncident(inc3.id).status);
+check("the detected fix is recorded as the engineer's, with what was seen", /primary to backup/.test((incidentDetail(inc3.id)!.timeline.find((t: any) => t.action === "manual_resolution_recorded") as any).detail));
+check("it recovers only after verification", await waitFor(() => getIncident(inc3.id).status === "recovered"), getIncident(inc3.id).status);
+check("the lesson now holds evidence then and what fixed it, with no words from the engineer", (() => {
+  const row: any = db.prepare(`SELECT reason, resolution FROM decision_feedback WHERE incident_id = ?`).get(inc3.id);
+  return row.reason === null && /backup provider|primary to backup/.test(row.resolution) && /switch_payment_provider/.test(row.resolution);
+})());
+const next = awaitingDecision({ action: "switch_payment_provider" });
+const seenByNext: any = pastDecisions(next.id)!.decisions.find((d: any) => d.incident_id === inc3.id);
+check("the next investigation is shown the readings recorded when it was declined", seenByNext?.evidence_when_declined?.probes?.payments?.latencyMs === 1802 && seenByNext.engineer_reason === null, JSON.stringify(seenByNext));
 
 // Incident 2: the same masked pattern returns; the investigator reads the lesson.
 reset(); world.payLatency = 1800;

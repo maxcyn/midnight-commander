@@ -64,7 +64,7 @@ const tools = [
     type: "webhook",
     name: "approve_action",
     description:
-      "Approve and execute the pending mitigation action (disable_recommendations) after the engineer explicitly confirms they want to disable recommendations for this incident.",
+      "Approve and execute the pending mitigation action after the engineer explicitly confirms they want that exact action for this incident. The action must match the pending proposal you were told about.",
     interruption_mode: "disable_during_tool_and_turn",
     api_schema: {
       url: `${publicUrl}/voice/incidents/{incident_id}/approve`,
@@ -77,8 +77,8 @@ const tools = [
         properties: {
           action: {
             type: "string",
-            description: "The exact action being approved: 'disable_recommendations'",
-            enum: ["disable_recommendations"],
+            description: "The exact action being approved, the same as the pending proposal: 'disable_recommendations' or 'switch_payment_provider'",
+            enum: ["disable_recommendations", "switch_payment_provider"],
           },
           responder: {
             type: "string",
@@ -86,7 +86,35 @@ const tools = [
           },
           confirmed: {
             type: "boolean",
-            description: "Set to true only when the engineer has explicitly approved disabling recommendations.",
+            description: "Set to true only when the engineer has explicitly approved the pending action.",
+          },
+        },
+      },
+    },
+  },
+  {
+    type: "webhook",
+    name: "decline_action",
+    description:
+      "Decline the pending proposed action when the engineer says no, that is wrong, or not to do it. Nothing is changed in the application. Do not ask the engineer to explain; they will make their own fix and the system verifies recovery.",
+    interruption_mode: "disable_during_tool_and_turn",
+    api_schema: {
+      url: `${publicUrl}/voice/incidents/{incident_id}/decline`,
+      method: "POST",
+      request_headers: headers,
+      path_params_schema: incidentPathParam,
+      request_body_schema: {
+        type: "object",
+        required: ["responder"],
+        properties: {
+          action: {
+            type: "string",
+            description: "The pending action being declined, the same as the pending proposal.",
+            enum: ["disable_recommendations", "switch_payment_provider"],
+          },
+          responder: {
+            type: "string",
+            dynamic_variable: "responder",
           },
         },
       },
@@ -141,9 +169,10 @@ BEHAVIOR & TONE
 HOW TO HANDLE SPOKEN REQUESTS
 1. "Explain the evidence" / "What is happening?" -> Call explain_evidence and summarize the impact, which hypothesis is supported vs contradicted, and the key Sentry/probe evidence.
 2. "Check payments" / "Check recommendations" -> Call check_dependency with dependency="payments" (or "recommendations") and report the live health and latency.
-3. "Disable recommendations" / "Approve this action" / "Go ahead" -> Call approve_action with action="disable_recommendations" and confirmed=true, then report the result.
-4. "I'll handle it" / "I'm taking over" -> Call take_over to transfer control to {{responder}} and stop autonomous actions.
-5. "Did it work?" / "What's the status?" -> Call check_status and report the current incident and verification status.`;
+3. "Approve this action" / "Go ahead" / "Yes, do it" -> Call approve_action with action set to exactly the pending proposed action above, and confirmed=true, then report the result.
+4. "No" / "Don't do that" / "That's wrong" -> Call decline_action with the pending action. Do not ask why. Say nothing was changed and that you will verify recovery once the engineer has made their fix.
+5. "I'll handle it" / "I'm taking over" -> Call take_over to transfer control to {{responder}} and stop autonomous actions. Use decline_action instead if they are rejecting the proposal.
+6. "Did it work?" / "What's the status?" -> Call check_status and report the current incident and verification status.`;
 
 const payload = {
   conversation_config: {

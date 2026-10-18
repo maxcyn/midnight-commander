@@ -9,9 +9,11 @@ import {
   initiateCall,
   recordCallOutcome,
   runVoiceProbe,
+  voiceDeclineAction,
   voiceTakeOver,
 } from "./voice.js";
 
+process.env.FIX_WATCH_INTERVAL_MS = "3600000"; // no background fix-watching during unit tests
 let failures = 0;
 function check(name: string, cond: boolean, detail = "") {
   console.log(`${cond ? "PASS" : "FAIL"}  ${name}${cond ? "" : "  " + detail}`);
@@ -124,6 +126,19 @@ check(
   calls2.length === 3 && calls2[2].responder === "backup-engineer" && getIncident(inc2).escalation_state === "escalated_to_backup",
   JSON.stringify(calls2),
 );
+
+ // ---- 7b. Declining by voice -----------------------------------------------
+const inc3 = openIncident("v-d4", "v-303");
+transition(inc3, "awaiting_decision", "system");
+const act3 = Number(db.prepare(`INSERT INTO proposed_actions (incident_id, action, target_environment, parameters, expires_at, created_at) VALUES (?,?,?,?,?,?)`)
+  .run(inc3, "disable_recommendations", "demo", "{}", new Date(Date.now() + 600_000).toISOString(), new Date().toISOString()).lastInsertRowid);
+check("unenrolled caller cannot decline", (() => { try { voiceDeclineAction({ incidentId: inc3, responder: "random-stranger" }); return false; } catch { return true; } })() && incidentDetail(inc3)!.proposedActions[0].approval_state === "pending");
+check("declining the wrong action name is refused", (() => { try { voiceDeclineAction({ incidentId: inc3, responder: "primary-engineer", action: "switch_payment_provider" }); return false; } catch { return true; } })());
+const dec = voiceDeclineAction({ incidentId: inc3, responder: "primary-engineer", action: "disable_recommendations" });
+check("decline needs no reason, changes nothing, and says so", dec.declined && /nothing was changed/.test(dec.spokenSummary) && incidentDetail(inc3)!.proposedActions[0].approval_state === "rejected" && getIncident(inc3).status === "awaiting_decision");
+check("declining records a lesson with no reason", (db.prepare(`SELECT reason, action FROM decision_feedback WHERE incident_id = ?`).get(inc3) as any)?.reason === null);
+check("declining twice is refused (nothing pending)", (() => { try { voiceDeclineAction({ incidentId: inc3, responder: "primary-engineer" }); return false; } catch { return true; } })());
+check("declining is not approval", incidentDetail(inc3)!.timeline.some((t: any) => t.action === "action_declined") && !incidentDetail(inc3)!.timeline.some((t: any) => t.action === "action_approved"));
 
 // ---- 8. "I'll handle it" transfers control & halts autonomy --------------
 const to = voiceTakeOver(inc2, "backup-engineer");
